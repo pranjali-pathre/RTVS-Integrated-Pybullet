@@ -45,6 +45,7 @@ class URRobotGym:
                 "ur5e_2f140",
                 pb_cfg={"gui": gui, "realtime": False, "opengl_render": True},
             )
+            assert p.isConnected(self.robot.pb_client.get_client_id())
         except:
             self.robot = Robot(
                 "ur5e_2f140",
