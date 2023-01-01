@@ -49,7 +49,10 @@ def main():
     inference_mode = args.inference
 
     config_lists = get_config_list(args.trials)
-    np.save(os.path.join(config["raw_dataset_folder"], "ds_configs.npy"), np.array(config_lists, dtype=object))
+    np.save(
+        os.path.join(config["raw_dataset_folder"], "ds_configs.npy"),
+        np.array(config_lists, dtype=object),
+    )
 
     pool = Pool(args.procs)
     pool.map(main_helper_task, enumerate(config_lists))

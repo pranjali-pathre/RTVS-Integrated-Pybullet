@@ -121,6 +121,6 @@ class IBVSHelper:
         v_norm = np.linalg.norm(v)
         logger.debug(f"RAW IBVS v_norm: {v_norm}, v: {v}")
         v_norm = min(v_norm, 0.4)
-        v = v* (v_norm / np.linalg.norm(v))
+        v = v * (v_norm / np.linalg.norm(v))
         # v = np.clip(v, -0.1, 0.1)
         return v, np.linalg.norm(e)

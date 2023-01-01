@@ -1,7 +1,6 @@
 import argparse
 from multiprocessing import Pool
 import os
-from pprint import pprint
 from matplotlib import pyplot as plt
 import numpy as np
 from utils.utils import load_config
@@ -26,6 +25,7 @@ def success_rate(rawlog_dir):
         print(state["obj_pos"][0], state["obj_pos"][-1])
 
     print(f"Success rate: {success / total}, {success}/{total}")
+
 
 def task_helper(arg):
     obj_vels = []
@@ -82,8 +82,9 @@ def task_helper(arg):
         times,
         actions,
         cam_eyes,
-        rgbd_paths
+        rgbd_paths,
     )
+
 
 def standardize_logs(exp_log_dir, n_procs=10):
     global _slice, rawlog_dir, ds_dir
@@ -105,13 +106,12 @@ def standardize_logs(exp_log_dir, n_procs=10):
     file_names.sort()
 
     args_list = list(enumerate(file_names))
-    chunk_size = int(np.ceil(len(args_list)/n_procs))
+    chunk_size = int(np.ceil(len(args_list) / n_procs))
     args_list_chunks = []
     print(chunk_size, len(args_list))
     for i in range(n_procs):
-        args_list_chunks.append(args_list[i*chunk_size:(i+1)*chunk_size])
-    
-    
+        args_list_chunks.append(args_list[i * chunk_size : (i + 1) * chunk_size])
+
     pool = Pool(n_procs)
     map_ret = pool.map(task_helper, args_list_chunks)
     for ret in map_ret:
@@ -128,8 +128,8 @@ def standardize_logs(exp_log_dir, n_procs=10):
 
     def standardize(x):
         x = np.asarray(x)
-        x_mean = 0#x.mean(axis=(0, 1))
-        x_std = 1#x.std(axis=(0, 1))
+        x_mean = 0  # x.mean(axis=(0, 1))
+        x_std = 1  # x.std(axis=(0, 1))
         if isinstance(x_std, np.ndarray):
             x_std[x_std == 0] = 1
         return (x - x_mean) / x_std, x_mean, x_std

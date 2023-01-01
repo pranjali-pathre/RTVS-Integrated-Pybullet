@@ -33,19 +33,26 @@ blur = thresh = opening = mask = gray
 whites = np.argwhere(mask == 255)
 top_left = whites.min(axis=0)
 bottom_right = whites.max(axis=0)
-corners = np.array([top_left, [top_left[0], bottom_right[1]], bottom_right, [bottom_right[0], top_left[1]]])
+corners = np.array(
+    [
+        top_left,
+        [top_left[0], bottom_right[1]],
+        bottom_right,
+        [bottom_right[0], top_left[1]],
+    ]
+)
 
 for corner in corners:
-    x,y = corner.ravel()
-    x,y = int(x), int(y)
-    x,y = y,x
-    cv2.circle(image,(x,y),8,(255,120,255),-1)
-    print("({}, {})".format(x,y))
+    x, y = corner.ravel()
+    x, y = int(x), int(y)
+    x, y = y, x
+    cv2.circle(image, (x, y), 8, (255, 120, 255), -1)
+    print("({}, {})".format(x, y))
 
 cv2.imshow("thresh", thresh)
 cv2.imshow("opening", opening)
 cv2.imshow("mask", mask)
-cv2.imshow("masked_img", mask.reshape(*mask.shape, 1)*image)
+cv2.imshow("masked_img", mask.reshape(*mask.shape, 1) * image)
 cv2.waitKey(0)
 cv2.imshow("image", image)
 cv2.waitKey(0)
