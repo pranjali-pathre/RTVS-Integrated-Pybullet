@@ -1,0 +1,15 @@
+log_dir: ../logs/
+gpus: 2
+experiment_name: vs
+test_split: 0.1
+val_split: 0.2
+batch_size: 64
+n_epochs: 4000
+lr: 0.001
+lr_sched:
+  factor: 0.1
+  patience: 10
+  verbose: True
+  threshold: 0.001
+out_dims: 3
+n_channels: 4
