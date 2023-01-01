@@ -87,7 +87,7 @@ def task_helper(arg):
 
 def standardize_logs(exp_log_dir, n_procs=10):
     global _slice, rawlog_dir, ds_dir
-    _slice = slice(3, 40)  # algo_working_time_slice
+    _slice = slice(0, None)  # algo_working_time_slice
     rawlog_dir = os.path.join(exp_log_dir, "raw")
     ds_dir = os.path.join(exp_log_dir, "ds")
     os.makedirs(ds_dir, exist_ok=True)
