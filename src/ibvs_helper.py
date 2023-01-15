@@ -1,9 +1,6 @@
 import cv2
-from matplotlib import pyplot as plt
 import numpy as np
-import logging
-
-logger = logging.getLogger("main")
+from utils.logger import logger
 
 
 def detect_corners(rgb_img):
@@ -35,7 +32,9 @@ def approach_depth(depth_img, corners):
 
 
 class IBVSHelper:
-    def __init__(self, target_image_file, cam_k, lm_params={}):
+    def __init__(
+        self, target_image_file, cam_k, lm_params={}, show_corners_window=True
+    ):
         lm_params.setdefault("mu", 0.01)
         lm_params.setdefault("lambda", 0.01)
         target_image = cv2.imread(target_image_file)
@@ -47,6 +46,7 @@ class IBVSHelper:
         self.cam_k = np.array(cam_k, dtype=np.float32)
         self._init_targets(target_image)
         self.last_mult_mat = None
+        self.show_corners_window = show_corners_window
 
     def _get_L(self, Z):
         if not isinstance(Z, np.ndarray):
@@ -101,26 +101,20 @@ class IBVSHelper:
     def get_velocity(self, current_image, depth_image):
         current_corners = detect_corners(current_image)
         if current_corners is None:
-            return np.zeros(6)
+            return np.zeros(3), 0.0
         display_img = current_image.copy()
         for x, y in self.target_corners:
             cv2.circle(display_img, (x, y), 5, (0, 0, 255), -1)
         for x, y in current_corners:
             cv2.circle(display_img, (x, y), 5, (255, 0, 0), -1)
         display_img = cv2.cvtColor(display_img, cv2.COLOR_RGB2BGR)
-        # cv2.imshow("corners", display_img)
-        # cv2.waitKey(1)
+        if self.show_corners_window:
+            cv2.imshow("corners", display_img)
+            cv2.waitKey(1)
         current_s = self._get_s_from_corners(current_corners)
         e = current_s - self.target_s
-        v = self.mult_mat(self._get_L(approach_depth(depth_image, current_corners))) @ e
+        # v = self.mult_mat(self._get_L(approach_depth(depth_image, current_corners))) @ e
         v = self.mult_mat(self._get_L(depth_image)) @ e
         self.lmda *= self.lmda_multiplier
-        # v[:] = 0
-        # v[0] = .1
         v = v[:3]
-        v_norm = np.linalg.norm(v)
-        logger.debug(f"RAW IBVS v_norm: {v_norm}, v: {v}")
-        v_norm = min(v_norm, 0.4)
-        v = v * (v_norm / np.linalg.norm(v))
-        # v = np.clip(v, -0.1, 0.1)
         return v, np.linalg.norm(e)

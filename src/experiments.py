@@ -14,7 +14,12 @@ def run_trial(obj_init_pos, vel, grasp_time):
         "grasp_time": grasp_time,
     }
     env = URRobotGym(
-        obj_init_pos, vel, grasp_time, gui=False, inference_mode=inference_mode
+        obj_init_pos,
+        vel,
+        grasp_time,
+        gui=False,
+        inference_mode=inference_mode,
+        record=False,
     )
     try:
         run_state = env.run()
