@@ -116,7 +116,9 @@ class VSController(Controller):
         ee_vel_cam, err = self.ibvs_helper.get_velocity(rgb_img, depth_img)
         ee_vel_gt = self.cam_to_gt_R.apply(ee_vel_cam)
         speed = min(self.max_speed, np.linalg.norm(ee_vel_gt))
-        vel = ee_vel_gt * speed / np.linalg.norm(ee_vel_gt)
+        vel = ee_vel_gt * (
+            speed / np.linalg.norm(ee_vel_gt) if not np.isclose(speed, 0) else 1
+        )
         if err < 0.05:
             self.ready_to_grasp = True
 
@@ -130,7 +132,7 @@ class VSController(Controller):
             action[:3] = self._get_ee_val(rgb_img, depth_img)
             if cur_t <= 0.6 * self.grasp_time:
                 tpos = self._action_vel_to_target_pos(action[:3], ee_pos)
-                tpos[2] = max(tpos[2], self.conveyor_level + self.box_size[2] + 0.01)
+                tpos[2] = max(tpos[2], self.conveyor_level + self.box_size[2] + 0.005)
                 action[2] = self._target_pos_to_action_vel(tpos, ee_pos)[2]
         else:
             action[4] = 1

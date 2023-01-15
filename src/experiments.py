@@ -5,6 +5,7 @@ from sim import URRobotGym
 import argparse
 from utils.utils import load_config
 from utils.sim_utils import get_config_list
+from utils.logger import logger
 
 
 def run_trial(obj_init_pos, vel, grasp_time):
@@ -64,5 +65,6 @@ def main():
 
 
 if __name__ == "__main__":
+    logger.set_level("critical")
     config = load_config()
     main()
