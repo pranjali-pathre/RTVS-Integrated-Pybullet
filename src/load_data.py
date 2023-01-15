@@ -38,6 +38,8 @@ def task_helper(arg):
     actions = []
     rgbd_paths = []
     cam_eyes = []
+    pcd_3ds = []
+    pcd_rgbs = []
 
     for i, file_name in arg:
         print(i, file_name)
@@ -56,6 +58,8 @@ def task_helper(arg):
         times.append(state["t"][_slice])
         actions.append(state["action"][_slice])
         cam_eyes.append(state["cam_eye"][_slice])
+        pcd_3ds.append(state["pcd_3d"][_slice])
+        pcd_rgbs.append(state["pcd_rgb"][_slice])
 
         images = state["images"].item()
         rgbs = images.pop("rgb")[_slice]
@@ -82,6 +86,8 @@ def task_helper(arg):
         times,
         actions,
         cam_eyes,
+        pcd_3ds,
+        pcd_rgbs,
         rgbd_paths,
     )
 
@@ -103,6 +109,8 @@ def standardize_logs(exp_log_dir, n_procs=10):
     actions = []
     rgbd_paths = []
     cam_eyes = []
+    pcd_3ds = []
+    pcd_rgbs = []
     file_names.sort()
 
     args_list = list(enumerate(file_names))
@@ -124,10 +132,12 @@ def standardize_logs(exp_log_dir, n_procs=10):
         times += ret[6]
         actions += ret[7]
         cam_eyes += ret[8]
-        rgbd_paths += ret[9]
+        pcd_3ds += ret[9]
+        pcd_rgbs += ret[10]
+        rgbd_paths += ret[11]
 
     def standardize(x):
-        x = np.asarray(x)
+        x = np.asarray(x, np.float32)
         x_mean = 0  # x.mean(axis=(0, 1))
         x_std = 1  # x.std(axis=(0, 1))
         if isinstance(x_std, np.ndarray):
@@ -143,6 +153,8 @@ def standardize_logs(exp_log_dir, n_procs=10):
     times, times_mean, times_std = standardize(times)
     actions, actions_mean, actions_std = standardize(actions)
     cam_eyes, cam_eyes_mean, cam_eyes_std = standardize(cam_eyes)
+    pcd_3ds, pcd_3ds_mean, pcd_3ds_std = standardize(pcd_3ds)
+    pcd_rgbs, pcd_rgbs_mean, pcd_rgbs_std = standardize(pcd_rgbs)
 
     np.savez_compressed(
         os.path.join(ds_dir, "combined_logs.npz"),
@@ -174,6 +186,12 @@ def standardize_logs(exp_log_dir, n_procs=10):
         obj_corners=obj_corners,
         obj_corners_mean=obj_corners_mean,
         obj_corners_std=obj_corners_std,
+        pcd_3ds=pcd_3ds,
+        pcd_3ds_mean=pcd_3ds_mean,
+        pcd_3ds_std=pcd_3ds_std,
+        pcd_rgbs=pcd_rgbs,
+        pcd_rgbs_mean=pcd_rgbs_mean,
+        pcd_rgbs_std=pcd_rgbs_std,
     )
 
 

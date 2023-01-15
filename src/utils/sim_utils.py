@@ -7,7 +7,7 @@ def get_random_config(rng=None):
     else:
         f = rng.normal
 
-    grasp_time = 8
+    grasp_time = 4
     vel = f(loc=[0, 0, 0], scale=[0.08, 0.1, 0], size=3)
     vel[1] = abs(vel[1])
     grasp_pos = f(loc=[0.6, 0.0, 0.875], scale=[0.15, 0.1, 0], size=3)

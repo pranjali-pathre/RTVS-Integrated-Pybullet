@@ -289,6 +289,10 @@ class URRobotGym:
 
     def run(self):
         state = {
+            "cam_int": [],
+            "cam_ext": [],
+            "pcd_3d": [],
+            "pcd_rgb": [],
             "obj_pos": [],
             "obj_corners": [],
             "ee_pos": [],
@@ -304,6 +308,21 @@ class URRobotGym:
             },
         }
 
+        def add_to_state(val, *args):
+            if isinstance(val, list) or (
+                isinstance(val, np.ndarray) and val.dtype == np.float64
+            ):
+                val = np.asarray(val, np.float32)
+            nonlocal state
+            list_val = state
+            for arg in args:
+                list_val = list_val[arg]
+            list_val.append(val)
+
+        def multi_add_to_state(*args):
+            for arg in args:
+                add_to_state(*arg)
+
         logger.info("Run start", obj_pose=self.obj_pos)
         time_steps = 1 / (self.step_dt * self._action_repeat)
 
@@ -312,21 +331,28 @@ class URRobotGym:
 
         total_sim_time = self.grasp_time + self.post_grasp_duration
         for t in range(int(np.ceil(time_steps * total_sim_time))):
-            state["obj_pos"].append(self.obj_pos)
-            state["obj_corners"].append(self.obj_pos_8)
-            state["ee_pos"].append(self.ee_pos)
-            state["joint_pos"].append(self.arm.get_jpos())
-            state["joint_vel"].append(self.arm.get_jvel())
-            state["t"].append(t / time_steps)
             rgb, depth, seg, cam_eye = self.render(
                 for_video=False, noise=self.depth_noise
             )
+            pcd_3d, pcd_rgb = self.cam.get_pcd()
+            multi_add_to_state(
+                (self.obj_pos, "obj_pos"),
+                (self.obj_pos_8, "obj_corners"),
+                (self.ee_pos, "ee_pos"),
+                (self.arm.get_jpos(), "joint_pos"),
+                (self.arm.get_jvel(), "joint_vel"),
+                (t / time_steps, "t"),
+                (cam_eye, "cam_eye"),
+                (rgb, "images", "rgb"),
+                (depth, "images", "depth"),
+                (seg, "images", "seg"),
+                (pcd_3d, "pcd_3d"),
+                (pcd_rgb, "pcd_rgb"),
+                (self.cam.get_cam_int(), "cam_int"),
+                (self.cam.get_cam_ext(), "cam_ext"),
+            )
             if self.record_mode:
                 Image.fromarray(rgb).save("imgs/" + str(int(t)).zfill(5) + ".png")
-            state["cam_eye"].append(cam_eye)
-            state["images"]["rgb"].append(rgb)
-            state["images"]["depth"].append(depth)
-            state["images"]["seg"].append(seg)
 
             if not self.inference_mode:
                 action = self.gt_controller.get_action(
@@ -336,7 +362,8 @@ class URRobotGym:
                 action = self.vs_controller.get_action(
                     rgb, depth, self.sim_time, self.ee_pos
                 )
-            state["action"].append(action)
+
+            add_to_state(action, "action")
             logger.info(time=self.sim_time, action=action)
             logger.info(ee_pos=self.ee_pos, obj_pos=self.obj_pos)
             self.step(action)
