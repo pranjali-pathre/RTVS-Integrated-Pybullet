@@ -334,7 +334,7 @@ class URRobotGym:
             rgb, depth, seg, cam_eye = self.render(
                 for_video=False, noise=self.depth_noise
             )
-            pcd_3d, pcd_rgb = self.cam.get_pcd()
+            pcd_3d, pcd_rgb = self.cam.get_pcd(depth_min=-np.inf, depth_max=np.inf)
             multi_add_to_state(
                 (self.obj_pos, "obj_pos"),
                 (self.obj_pos_8, "obj_corners"),

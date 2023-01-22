@@ -5,6 +5,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 from utils.utils import load_config
 from multiprocessing.pool import ThreadPool
+import gc
 
 
 def load_state(file_name):
@@ -20,76 +21,86 @@ def success_rate(rawlog_dir):
     for file_name in file_names:
         state = load_state(os.path.join(rawlog_dir, file_name))
         # print(state["init_config"])
-        if state["obj_pos"][-1][2] - state["obj_pos"][0][2] > 0.04:
+        max_ht = max(i[2] for i in state["obj_pos"])
+        if max_ht - state["obj_pos"][0][2] > 0.04:
             success += 1
-        print(state["obj_pos"][0], state["obj_pos"][-1])
+        print(state["obj_pos"][0], state["obj_pos"][-1], max_ht)
 
     print(f"Success rate: {success / total}, {success}/{total}")
 
 
 def task_helper(arg):
-    obj_vels = []
-    ee_vels = []
-    joint_vels = []
-    obj_poses = []
-    obj_corners = []
-    ee_poses = []
-    times = []
-    actions = []
-    rgbd_paths = []
-    cam_eyes = []
-    pcd_3ds = []
-    pcd_rgbs = []
+    data_paths = []
 
     for i, file_name in arg:
         print(i, file_name)
         state = load_state(os.path.join(rawlog_dir, file_name))
-        # if state["obj_pos"][-1][2] - state["obj_pos"][0][2] < 0.03:
-        #     print("skipping")
-        #     continue
-        obj_poses.append(state["obj_pos"][_slice])
-        obj_corners.append(state["obj_corners"][_slice].flatten())
-        ee_poses.append(state["ee_pos"][_slice])
-        ee_vels.append(np.gradient(state["ee_pos"][_slice], axis=0))
-        obj_vels.append(
-            np.gradient(state["obj_pos"][_slice], axis=0).mean(axis=0).reshape(1, 3)
-        )
-        joint_vels.append(state["joint_vel"][_slice])
-        times.append(state["t"][_slice])
-        actions.append(state["action"][_slice])
-        cam_eyes.append(state["cam_eye"][_slice])
-        pcd_3ds.append(state["pcd_3d"][_slice])
-        pcd_rgbs.append(state["pcd_rgb"][_slice])
-
-        images = state["images"].item()
-        rgbs = images.pop("rgb")[_slice]
-        depths = images.pop("depth")[_slice]
-        rgbs = np.asarray(rgbs, dtype=np.float32) / 255
-        depths = np.asarray(depths, dtype=np.float32) / 2  # max depth val is 1.9x
-        rgbds = np.concatenate((rgbs, np.expand_dims(depths, 3)), axis=3)
         pool = ThreadPool()
-        rgbd_base_names = [f"{i}_{j}.npz" for j in range(len(rgbds))]
+        images = state["images"].item()
+        rgbs = np.asarray(images.pop("rgb")[_slice], dtype=np.float32) / 255
+        depths = (
+            np.asarray(images.pop("depth")[_slice], dtype=np.float32) / 2
+        )  # max depth val is 1.9x
+        rgbds = np.concatenate((rgbs, np.expand_dims(depths, 3)), axis=3)
+        base_names = [f"data_{i}_{j}.npz" for j in range(len(rgbds))]
+
+        def save_data(
+            file,
+            obj_pos,
+            obj_vel,
+            obj_corners,
+            ee_pos,
+            ee_vel,
+            joint_vels,
+            t,
+            action,
+            cam_eye,
+            rgbd,
+            pcd_3d,
+            pcd_rgb,
+        ):
+            np.savez_compressed(
+                file,
+                obj_pos=obj_pos,
+                obj_vel=obj_vel,
+                obj_corners=obj_corners,
+                ee_pos=ee_pos,
+                ee_vel=ee_vel,
+                joint_vels=joint_vels,
+                t=t,
+                action=action,
+                cam_eye=cam_eye,
+                rgbd=rgbd,
+                pcd_3d=pcd_3d,
+                pcd_rgb=pcd_rgb,
+            )
+
         pool.map(
-            lambda arg: np.savez_compressed(arg[0], rgbd=arg[1]),
-            zip([os.path.join(ds_dir, f) for f in rgbd_base_names], rgbds),
+            lambda args: save_data(*args),
+            zip(
+                [os.path.join(ds_dir, f) for f in base_names],
+                state["obj_pos"][_slice],
+                np.gradient(state["obj_pos"][_slice], axis=0)
+                .mean(axis=0)
+                .reshape(1, 3)
+                .repeat(len(state["obj_pos"][_slice]), axis=0),
+                state["obj_corners"][_slice].flatten(),
+                state["ee_pos"][_slice],
+                np.gradient(state["ee_pos"][_slice], axis=0),
+                state["joint_vel"][_slice],
+                state["t"][_slice],
+                state["action"][_slice],
+                state["cam_eye"][_slice],
+                rgbds,
+                state["pcd_3d"][_slice],
+                state["pcd_rgb"][_slice],
+            ),
         )
         pool.close()
-        rgbd_paths.append(rgbd_base_names)
-
-    return (
-        obj_poses,
-        obj_corners,
-        ee_poses,
-        ee_vels,
-        obj_vels,
-        joint_vels,
-        times,
-        actions,
-        cam_eyes,
-        pcd_3ds,
-        pcd_rgbs,
-        rgbd_paths,
-    )
+        data_paths.append(base_names)
+        del state
+        gc.collect()
+    return data_paths
 
 
 def standardize_logs(exp_log_dir, n_procs=10):
@@ -99,19 +110,8 @@ def standardize_logs(exp_log_dir, n_procs=10):
     ds_dir = os.path.join(exp_log_dir, "ds")
     os.makedirs(ds_dir, exist_ok=True)
     file_names = [f for f in os.listdir(rawlog_dir) if f[:2] != "ds"]
-    obj_vels = []
-    ee_vels = []
-    joint_vels = []
-    obj_poses = []
-    obj_corners = []
-    ee_poses = []
-    times = []
-    actions = []
-    rgbd_paths = []
-    cam_eyes = []
-    pcd_3ds = []
-    pcd_rgbs = []
     file_names.sort()
+    data_paths = []
 
     args_list = list(enumerate(file_names))
     chunk_size = int(np.ceil(len(args_list) / n_procs))
@@ -122,76 +122,12 @@ def standardize_logs(exp_log_dir, n_procs=10):
 
     pool = Pool(n_procs)
     map_ret = pool.map(task_helper, args_list_chunks)
+    pool.close()
     for ret in map_ret:
-        obj_poses += ret[0]
-        obj_corners += ret[1]
-        ee_poses += ret[2]
-        ee_vels += ret[3]
-        obj_vels += ret[4]
-        joint_vels += ret[5]
-        times += ret[6]
-        actions += ret[7]
-        cam_eyes += ret[8]
-        pcd_3ds += ret[9]
-        pcd_rgbs += ret[10]
-        rgbd_paths += ret[11]
-
-    def standardize(x):
-        x = np.asarray(x, np.float32)
-        x_mean = 0  # x.mean(axis=(0, 1))
-        x_std = 1  # x.std(axis=(0, 1))
-        if isinstance(x_std, np.ndarray):
-            x_std[x_std == 0] = 1
-        return (x - x_mean) / x_std, x_mean, x_std
-
-    obj_poses, obj_poses_mean, obj_poses_std = standardize(obj_poses)
-    obj_corners, obj_corners_mean, obj_corners_std = standardize(obj_corners)
-    ee_poses, ee_poses_mean, ee_poses_std = standardize(ee_poses)
-    ee_vels, ee_vels_mean, ee_vels_std = standardize(ee_vels)
-    obj_vels, obj_vels_mean, obj_vels_std = standardize(obj_vels)
-    joint_vels, joint_vels_mean, joint_vels_std = standardize(joint_vels)
-    times, times_mean, times_std = standardize(times)
-    actions, actions_mean, actions_std = standardize(actions)
-    cam_eyes, cam_eyes_mean, cam_eyes_std = standardize(cam_eyes)
-    pcd_3ds, pcd_3ds_mean, pcd_3ds_std = standardize(pcd_3ds)
-    pcd_rgbs, pcd_rgbs_mean, pcd_rgbs_std = standardize(pcd_rgbs)
-
+        data_paths += ret
     np.savez_compressed(
-        os.path.join(ds_dir, "combined_logs.npz"),
-        obj_poses_mean=obj_poses_mean,
-        obj_poses_std=obj_poses_std,
-        ee_poses_mean=ee_poses_mean,
-        ee_poses_std=ee_poses_std,
-        ee_vels_mean=ee_vels_mean,
-        ee_vels_std=ee_vels_std,
-        obj_vels_mean=obj_vels_mean,
-        obj_vels_std=obj_vels_std,
-        joint_vels_mean=joint_vels_mean,
-        joint_vels_std=joint_vels_std,
-        times_mean=times_mean,
-        times_std=times_std,
-        actions_mean=actions_mean,
-        actions_std=actions_std,
-        obj_poses=obj_poses,
-        ee_poses=ee_poses,
-        ee_vels=ee_vels,
-        obj_vels=obj_vels,
-        joint_vels=joint_vels,
-        times=times,
-        actions=actions,
-        cam_eyes=cam_eyes,
-        cam_eyes_mean=cam_eyes_mean,
-        cam_eyes_std=cam_eyes_std,
-        rgbd_paths=rgbd_paths,
-        obj_corners=obj_corners,
-        obj_corners_mean=obj_corners_mean,
-        obj_corners_std=obj_corners_std,
-        pcd_3ds=pcd_3ds,
-        pcd_3ds_mean=pcd_3ds_mean,
-        pcd_3ds_std=pcd_3ds_std,
-        pcd_rgbs=pcd_rgbs,
-        pcd_rgbs_mean=pcd_rgbs_mean,
-        pcd_rgbs_std=pcd_rgbs_std,
+        os.path.join(ds_dir, "data_paths.npz"),
+        data_paths=data_paths,
     )
 
 
