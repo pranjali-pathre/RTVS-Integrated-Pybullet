@@ -52,12 +52,14 @@ def task_helper(arg):
             ee_pos,
             ee_vel,
             joint_vels,
-            t,
+            time,
             action,
             cam_eye,
             rgbd,
             pcd_3d,
             pcd_rgb,
+            cam_int,
+            cam_ext,
         ):
             np.savez_compressed(
                 file,
@@ -67,12 +69,14 @@ def task_helper(arg):
                 ee_pos=ee_pos,
                 ee_vel=ee_vel,
                 joint_vels=joint_vels,
-                t=t,
+                time=time,
                 action=action,
                 cam_eye=cam_eye,
                 rgbd=rgbd,
                 pcd_3d=pcd_3d,
                 pcd_rgb=pcd_rgb,
+                cam_int=cam_int,
+                cam_ext=cam_ext,
             )
 
         pool.map(
@@ -94,6 +98,8 @@ def task_helper(arg):
                 rgbds,
                 state["pcd_3d"][_slice],
                 state["pcd_rgb"][_slice],
+                state["cam_int"][_slice],
+                state["cam_ext"][_slice],
             ),
         )
         pool.close()

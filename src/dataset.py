@@ -22,20 +22,23 @@ class BaseDataset(Dataset):
     @staticmethod
     def get_data_point(file_name):
         data = np.load(file_name)
-        return {
-            "obj_pos": data["obj_pos"],
-            "obj_vel": data["obj_vel"],
-            "obj_corners": data["obj_corners"],
-            "ee_pos": data["ee_pos"],
-            "ee_vel": data["ee_vel"],
-            "joint_vel": data["joint_vels"],
-            "time": data["t"],
-            "action": data["action"],
-            "cam_eye": data["cam_eye"],
-            "rgbd": data["rgbd"],
-            "pcd_3d": data["pcd_3d"],
-            "pcd_rgb": data["pcd_rgb"],
-        }
+        data_types = [
+            "obj_pos",
+            "obj_vel",
+            "obj_corners",
+            "ee_pos",
+            "ee_vel",
+            "joint_vels",
+            "time",
+            "action",
+            "cam_eye",
+            "rgbd",
+            "pcd_3d",
+            "pcd_rgb",
+            "cam_int",
+            "cam_ext",
+        ]
+        return {i: data[i] for i in data_types}
 
     def __len__(self):
         pass
