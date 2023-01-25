@@ -7,9 +7,6 @@ from airobot.arm.ur5e_pybullet import UR5ePybullet as UR5eArm
 from airobot.utils.common import clamp
 from airobot.utils.common import euler2quat, quat2euler, euler2rot
 from airobot.sensor.camera.rgbdcam_pybullet import RGBDCameraPybullet
-from controllers import GTController, RTVSController, VSController
-from ibvs_helper import IBVSHelper
-from rtvs.rtvs import Rtvs
 from utils.sim_utils import get_random_config
 from utils.logger import logger
 from scipy.spatial.transform import Rotation as R
@@ -57,24 +54,7 @@ class URRobotGym:
         self.reset()
         self.record_mode = record
         self.depth_noise = config.get("dnoise", 0)
-        if self.inference_mode:
-            self.vs_controller = RTVSController(
-                self.grasp_time,
-                self.ee_home_pos,
-                self.box.size,
-                self.conveyor_level,
-                self._ee_pos_scale,
-                Rtvs(np.asarray(Image.open("dest.png"))),
-                self.cam_to_gt_R,
-            )
-        else:
-            self.gt_controller = GTController(
-                self.grasp_time,
-                self.ee_home_pos,
-                self.box.size,
-                self.conveyor_level,
-                self._ee_pos_scale,
-            )
+        self._set_controller()
 
     def config_vals_set(self, belt_init_pose, belt_vel, grasp_time=4):
         self.step_dt = 0.01
@@ -124,6 +104,30 @@ class URRobotGym:
         self.box.init_ori = np.deg2rad([0, 0, 90])
         # self.box.init_ori = [0, 0, np.arctan2(self.belt.vel[1], self.belt.vel[0])]
         self.box.color = [1, 0, 0, 1]
+
+    def _set_controller(self):
+        if self.inference_mode:
+            from controllers.rtvs import Rtvs, RTVSController
+
+            self.vs_controller = RTVSController(
+                self.grasp_time,
+                self.ee_home_pos,
+                self.box.size,
+                self.conveyor_level,
+                self._ee_pos_scale,
+                Rtvs(np.asarray(Image.open("dest.png"))),
+                self.cam_to_gt_R,
+            )
+        else:
+            from controllers.gt import GTController
+
+            self.gt_controller = GTController(
+                self.grasp_time,
+                self.ee_home_pos,
+                self.box.size,
+                self.conveyor_level,
+                self._ee_pos_scale,
+            )
 
     def get_pos(self, obj):
         if isinstance(obj, int):
