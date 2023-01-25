@@ -7,8 +7,9 @@ from airobot.arm.ur5e_pybullet import UR5ePybullet as UR5eArm
 from airobot.utils.common import clamp
 from airobot.utils.common import euler2quat, quat2euler, euler2rot
 from airobot.sensor.camera.rgbdcam_pybullet import RGBDCameraPybullet
-from controllers import GTController, VSController
+from controllers import GTController, RTVSController, VSController
 from ibvs_helper import IBVSHelper
+from rtvs.rtvs import Rtvs
 from utils.sim_utils import get_random_config
 from utils.logger import logger
 from scipy.spatial.transform import Rotation as R
@@ -29,7 +30,7 @@ class URRobotGym:
     def __init__(
         self,
         belt_init_pose=[0.45, -0.05, 0.851],
-        belt_vel=[0.03, 0.05, 0],
+        belt_vel=[0, 0, 0],
         grasp_time=4,
         gui=False,
         config: dict = {},
@@ -57,13 +58,13 @@ class URRobotGym:
         self.record_mode = record
         self.depth_noise = config.get("dnoise", 0)
         if self.inference_mode:
-            self.vs_controller = VSController(
+            self.vs_controller = RTVSController(
                 self.grasp_time,
                 self.ee_home_pos,
                 self.box.size,
                 self.conveyor_level,
                 self._ee_pos_scale,
-                IBVSHelper("./dest.png", self.cam.get_cam_int(), {"lambda": 0.4}, gui),
+                Rtvs(np.asarray(Image.open("dest.png"))),
                 self.cam_to_gt_R,
             )
         else:
