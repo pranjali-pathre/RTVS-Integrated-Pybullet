@@ -1,5 +1,6 @@
 from multiprocessing import Pool
 import os
+import shutil
 import numpy as np
 from sim import URRobotGym
 import argparse
@@ -51,12 +52,13 @@ def main():
     args = parser.parse_args()
     np.random.seed(args.seed)
     folder_name = config["raw_dataset_folder"]
-    os.makedirs(config["raw_dataset_folder"], exist_ok=True)
+    shutil.rmtree(folder_name, ignore_errors=True)
+    os.makedirs(folder_name, exist_ok=True)
     inference_mode = args.inference
 
     config_lists = get_config_list(args.trials)
     np.save(
-        os.path.join(config["raw_dataset_folder"], "ds_configs.npy"),
+        os.path.join(folder_name, "ds_configs.npy"),
         np.array(config_lists, dtype=object),
     )
 

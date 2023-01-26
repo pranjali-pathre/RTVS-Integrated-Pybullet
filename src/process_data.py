@@ -1,6 +1,7 @@
 import argparse
 from multiprocessing import Pool
 import os
+import shutil
 from matplotlib import pyplot as plt
 import numpy as np
 from utils.utils import load_config
@@ -109,11 +110,12 @@ def task_helper(arg):
     return data_paths
 
 
-def standardize_logs(exp_log_dir, n_procs=10):
+def process_logs(exp_log_dir, n_procs=10):
     global _slice, rawlog_dir, ds_dir
     _slice = slice(0, None)  # algo_working_time_slice
     rawlog_dir = os.path.join(exp_log_dir, "raw")
     ds_dir = os.path.join(exp_log_dir, "ds")
+    shutil.rmtree(ds_dir, ignore_errors=True)
     os.makedirs(ds_dir, exist_ok=True)
     file_names = [f for f in os.listdir(rawlog_dir) if f[:2] != "ds"]
     file_names.sort()
@@ -164,5 +166,5 @@ if __name__ == "__main__":
 
     # preprocess_logs_ee_vels(os.path.join(rawlog_dir, "ee_vels_dataset.npz"))
     # visualize_logs_ee_vels(rawlog_dir)
-    standardize_logs(experiment_logs_dir, args.nprocs)
+    process_logs(experiment_logs_dir, args.nprocs)
     # success_rate(rawlog_dir)
