@@ -6,6 +6,7 @@ import os
 import torch
 from .utils.photo_error import mse_
 from .utils.flow_utils import flow2img
+from utils.logger import logger
 from PIL import Image
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
@@ -37,6 +38,8 @@ class Rtvs:
         iterations = iterations to train NN (high value => slower but more accurate)
         horizon = MPC horizon
         """
+        if isinstance(img_goal, str):
+            img_goal = np.asarray(Image.open(img_goal))
         self.img_goal = img_goal
         self.horizon = horizon
         self.iterations = iterations
@@ -102,7 +105,7 @@ class Rtvs:
             f_hat = vs_lstm.forward(vel, Lsx, Lsy, self.horizon, f12)
             loss = loss_fn(f_hat, f12)
 
-            print("MSE:", str(np.sqrt(loss.item())))
+            logger.debug(rtvs_mse=loss.item()**0.5, rtvs_itr=itr)
             loss.backward(retain_graph=True)
             optimiser.step()
 
@@ -117,8 +120,7 @@ class Rtvs:
             )
 
         vel = vs_lstm.v_interm[0].detach().cpu().numpy()
-        print("RAW RTVS VELOCITY:", vel)
-        # vel[:3] = [0, -1 , 0]
+        logger.info(RAW_RTVS_VELOCITY=vel)
         vel = vel / np.linalg.norm(vel)
 
         return vel, photo_error_val

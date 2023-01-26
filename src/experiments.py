@@ -19,7 +19,7 @@ def run_trial(obj_init_pos, vel, grasp_time):
         vel,
         grasp_time,
         gui=False,
-        inference_mode=inference_mode,
+        controller_type=controller_type,
         record=False,
     )
     try:
@@ -42,17 +42,24 @@ def main_helper_task(arg):
 
 
 def main():
-    global folder_name, inference_mode
+    global folder_name, controller_type
     parser = argparse.ArgumentParser()
     parser.add_argument("--trials", "-t", type=int, default=1)
-    parser.add_argument("-i", "--inference", action="store_true")
+    parser.add_argument(
+        "-c",
+        "--controller",
+        type=str,
+        default="ibvs",
+        help="controller",
+        choices=["gt", "rtvs", "ibvs"],
+    )
     parser.add_argument("--seed", type=int, default=12)
     parser.add_argument("--procs", "-p", type=int, default=10)
     args = parser.parse_args()
     np.random.seed(args.seed)
     folder_name = config["raw_dataset_folder"]
     os.makedirs(config["raw_dataset_folder"], exist_ok=True)
-    inference_mode = args.inference
+    controller_type = args.controller
 
     config_lists = get_config_list(args.trials)
     np.save(
