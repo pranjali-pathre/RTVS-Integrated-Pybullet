@@ -153,3 +153,4 @@ cython_debug/
 logs/
 logs
 src/imgs
+data/FlowNet2_checkpoint.pth.tar

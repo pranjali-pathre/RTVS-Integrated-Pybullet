@@ -7,8 +7,6 @@ from airobot.arm.ur5e_pybullet import UR5ePybullet as UR5eArm
 from airobot.utils.common import clamp
 from airobot.utils.common import euler2quat, quat2euler, euler2rot
 from airobot.sensor.camera.rgbdcam_pybullet import RGBDCameraPybullet
-from controllers import GTController, VSController
-from ibvs_helper import IBVSHelper
 from utils.sim_utils import get_random_config
 from utils.logger import logger
 from scipy.spatial.transform import Rotation as R
@@ -29,13 +27,14 @@ class URRobotGym:
     def __init__(
         self,
         belt_init_pose=[0.45, -0.05, 0.851],
-        belt_vel=[0.03, 0.05, 0],
+        belt_vel=[0, 0, 0],
         grasp_time=4,
         gui=False,
         config: dict = {},
-        inference_mode=False,
+        controller_type="gt",
         record=True,
     ):
+        self.gui = gui
         try:
             self.robot = Robot(
                 "ur5e_2f140",
@@ -51,29 +50,13 @@ class URRobotGym:
         self.cam: RGBDCameraPybullet = self.robot.cam
         self.arm: UR5eArm = self.robot.arm
         self.pb_client = self.robot.pb_client
-        self.inference_mode = inference_mode
         self.config_vals_set(belt_init_pose, belt_vel, grasp_time)
         self.reset()
         self.record_mode = record
         self.depth_noise = config.get("dnoise", 0)
-        if self.inference_mode:
-            self.vs_controller = VSController(
-                self.grasp_time,
-                self.ee_home_pos,
-                self.box.size,
-                self.conveyor_level,
-                self._ee_pos_scale,
-                IBVSHelper("./dest.png", self.cam.get_cam_int(), {"lambda": 0.4}, gui),
-                self.cam_to_gt_R,
-            )
-        else:
-            self.gt_controller = GTController(
-                self.grasp_time,
-                self.ee_home_pos,
-                self.box.size,
-                self.conveyor_level,
-                self._ee_pos_scale,
-            )
+        self.controller_type = controller_type
+        self.vs_mode = bool(controller_type in ["rtvs", "ibvs"])
+        self._set_controller()
 
     def config_vals_set(self, belt_init_pose, belt_vel, grasp_time=4):
         self.step_dt = 0.01
@@ -101,8 +84,6 @@ class URRobotGym:
         self.cam_to_gt_R = R.from_euler("xyz", self.cam_ori)
         self.ref_ee_ori = self.ee_home_ori[:]
         self.grasp_time = grasp_time
-        # if self.inference_mode:
-        #     self.grasp_time = 8
         self.post_grasp_duration = 1
 
         self.belt = SimpleNamespace()
@@ -123,6 +104,45 @@ class URRobotGym:
         self.box.init_ori = np.deg2rad([0, 0, 90])
         # self.box.init_ori = [0, 0, np.arctan2(self.belt.vel[1], self.belt.vel[0])]
         self.box.color = [1, 0, 0, 1]
+
+    def _set_controller(self):
+        logger.info(controller_type=self.controller_type)
+        if self.controller_type == "rtvs":
+            from controllers.rtvs import Rtvs, RTVSController
+
+            self.vs_controller = RTVSController(
+                self.grasp_time,
+                self.ee_home_pos,
+                self.box.size,
+                self.conveyor_level,
+                self._ee_pos_scale,
+                Rtvs("./dest.png"),
+                self.cam_to_gt_R,
+            )
+        elif self.controller_type == "ibvs":
+            from controllers.ibvs import IBVSController, IBVSHelper
+
+            self.vs_controller = IBVSController(
+                self.grasp_time,
+                self.ee_home_pos,
+                self.box.size,
+                self.conveyor_level,
+                self._ee_pos_scale,
+                IBVSHelper(
+                    "./dest.png", self.cam.get_cam_int(), {"lambda": 0.4}, self.gui
+                ),
+                self.cam_to_gt_R,
+            )
+        else:
+            from controllers.gt import GTController
+
+            self.gt_controller = GTController(
+                self.grasp_time,
+                self.ee_home_pos,
+                self.box.size,
+                self.conveyor_level,
+                self._ee_pos_scale,
+            )
 
     def get_pos(self, obj):
         if isinstance(obj, int):
@@ -348,13 +368,13 @@ class URRobotGym:
                 (seg, "images", "seg"),
                 (pcd_3d, "pcd_3d"),
                 (pcd_rgb, "pcd_rgb"),
-                (self.cam.get_cam_int(), "cam_int"),
                 (self.cam.get_cam_ext(), "cam_ext"),
             )
             if self.record_mode:
                 Image.fromarray(rgb).save("imgs/" + str(int(t)).zfill(5) + ".png")
+                (self.cam.get_cam_int(), "cam_int"),
+            if not self.vs_mode:
 
-            if not self.inference_mode:
                 action = self.gt_controller.get_action(
                     self.ee_pos, self.obj_pos, self.belt.vel, self.sim_time
                 )
@@ -374,11 +394,11 @@ class URRobotGym:
         return state
 
 
-def simulate(init_cfg, gui, inf_mode, record):
+def simulate(init_cfg, gui, controller, record):
     env = URRobotGym(
         *init_cfg,
         gui=gui,
-        inference_mode=inf_mode,
+        controller_type=controller,
         record=record,
     )
     return env.run()
@@ -386,8 +406,14 @@ def simulate(init_cfg, gui, inf_mode, record):
 
 def main():
     parser = argparse.ArgumentParser()
-    # run in inference mode using model
-    parser.add_argument("-i", "--inference", action="store_true")
+    parser.add_argument(
+        "-c",
+        "--controller",
+        type=str,
+        default="gt",
+        help="controller",
+        choices=["gt", "rtvs", "ibvs"],
+    )
     parser.add_argument("--random", action="store_true")
     parser.add_argument("--gui", action="store_true", help="show gui")
     parser.add_argument("--no-gui", dest="gui", action="store_false", help="no gui")
@@ -403,7 +429,7 @@ def main():
     if args.random:
         init_cfg = get_random_config()[:2]
 
-    return simulate(init_cfg, args.gui, args.inference, args.record)
+    return simulate(init_cfg, args.gui, args.controller, args.record)
 
 
 if __name__ == "__main__":
