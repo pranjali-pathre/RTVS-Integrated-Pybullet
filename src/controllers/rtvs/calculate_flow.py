@@ -29,15 +29,11 @@ class FlowNet2Utils:
     @torch.no_grad()
     def flow_calculate(self, img1, img2):
         assert img1.shape == img2.shape, f"shapes dont match {img1.shape}, {img2.shape}"
-        img_h, img_w = img1.shape[:2]
-        org_img_h, org_img_w = img1.shape[:2]
-        while img_h % 64 != 0 or img_w % 64 != 0:
-            img_h *= 2
-            img_w *= 2
-
-        if org_img_h != img_h:
-            img1 = self.resize_img(img1, (img_w, img_h))
-            img2 = self.resize_img(img2, (img_w, img_h))
+        org_shape = img1.shape[1::-1]
+        req_shape = (512, 384)
+        if org_shape != req_shape:
+            img1 = self.resize_img(img1, req_shape)
+            img2 = self.resize_img(img2, req_shape)
 
         images = [img1, img2]
 
@@ -46,8 +42,8 @@ class FlowNet2Utils:
         result = self.net(im)[0].squeeze()
         data = result.data.cpu().numpy().transpose(1, 2, 0)
 
-        if org_img_h != img_h:
-            data = self.resize_img(data, (org_img_w, org_img_h))
+        if org_shape != req_shape:
+            data = self.resize_img(data, org_shape)
 
         return data
 
