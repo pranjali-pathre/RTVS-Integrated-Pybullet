@@ -1,4 +1,5 @@
 import os
+import shutil
 from types import SimpleNamespace
 import numpy as np
 import pybullet as p
@@ -26,8 +27,8 @@ np.set_string_function(
 class URRobotGym:
     def __init__(
         self,
-        belt_init_pose=[0.45, -0.05, 0.851],
-        belt_vel=[0, 0, 0],
+        belt_init_pose,
+        belt_vel,
         grasp_time=4,
         gui=False,
         config: dict = {},
@@ -87,7 +88,7 @@ class URRobotGym:
         self.post_grasp_duration = 1
 
         self.belt = SimpleNamespace()
-        self.belt.size = np.array([0.6, 0.6, 0.001])
+        self.belt.size = np.array([60, 60, 0.001])
         self.belt.vel = np.array(belt_vel)
         self.belt.vel[2] = 0
         self.belt.init_pos = np.array(belt_init_pose)
@@ -116,7 +117,7 @@ class URRobotGym:
                 self.box.size,
                 self.conveyor_level,
                 self._ee_pos_scale,
-                Rtvs("./dest.png"),
+                Rtvs("./dest.png", self.cam.get_cam_int()),
                 self.cam_to_gt_R,
             )
         elif self.controller_type == "ibvs":
@@ -164,9 +165,6 @@ class URRobotGym:
         )
         self.arm.go_home(ignore_physics=True)
         self.arm.eetool.open(ignore_physics=True)
-        ee_pos, _, _, ee_euler = self.arm.get_ee_pose()
-        logger.info(home_ee_pos=ee_pos, home_ee_euler=ee_euler)
-        logger.info(home_jpos=self.arm.get_jpos)
         # exit(0)
         self.table.id: int = self.robot.pb_client.load_urdf(
             "table/table.urdf", self.table.pos, euler2quat(self.table.ori), scaling=10
@@ -188,7 +186,12 @@ class URRobotGym:
             rgba=self.box.color,
             base_ori=euler2quat(self.box.init_ori),
         )
-        logger.info(init_belt_pose=self.get_pos(self.belt))
+        ee_pos, _, _, ee_euler = self.arm.get_ee_pose()
+        logger.info(init_belt_pose=self.get_pos(self.belt), belt_vel=self.belt.vel)
+        # to make arm transparent (not works on TINY_RENDERER when getting img)
+        # [ p.changeVisualShape(self.arm.robot_id, i, rgbaColor=[0, 1, 1, 0])   for i in range(-1, 23)]
+        logger.info(home_ee_pos=ee_pos, home_ee_euler=ee_euler)
+        logger.info(home_jpos=self.arm.get_jpos())
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1)
         self.render(for_video=False)
         self.gripper_ori = 0
@@ -302,7 +305,9 @@ class URRobotGym:
         cam_eye = self.cam_pos
         cam_dir = cam_eye + self.cam_to_gt_R.apply([0, 0, 0.1])
         p.addUserDebugLine(cam_dir, cam_eye, [0, 1, 0], 3, 0.5)
-        rgb, depth, seg = self.cam.get_images(get_rgb, get_depth, get_seg)
+        rgb, depth, seg = self.cam.get_images(
+            get_rgb, get_depth, get_seg, shadow=0, lightDirection=[0, 0, 0]
+        )
         if noise is not None:
             depth *= np.random.normal(loc=1, scale=noise, size=depth.shape)
         return rgb, depth, seg, cam_eye
@@ -347,6 +352,7 @@ class URRobotGym:
         time_steps = 1 / (self.step_dt * self._action_repeat)
 
         if self.record_mode:
+            shutil.rmtree("imgs", ignore_errors=True)
             os.makedirs("imgs", exist_ok=True)
 
         total_sim_time = self.grasp_time + self.post_grasp_duration
@@ -425,7 +431,7 @@ def main():
     if args.seed is not None:
         np.random.seed(args.seed)
 
-    init_cfg = ([0.45, -0.05, 0.851], [0.03, 0.05, 0])
+    init_cfg = ([0.45, -0.05, 0.851], [0, 0, 0])
     if args.random:
         init_cfg = get_random_config()[:2]
 

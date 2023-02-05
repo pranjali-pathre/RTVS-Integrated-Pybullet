@@ -26,10 +26,11 @@ class Rtvs:
     def __init__(
         self,
         img_goal: np.ndarray,
+        cam_k: np.ndarray,
         ct=1,
-        horizon=10,
+        horizon=1,
         LR=0.005,
-        iterations=1,
+        iterations=10,
     ):
         """
         img_goal: RGB array for final pose
@@ -43,6 +44,7 @@ class Rtvs:
         self.img_goal = img_goal
         self.horizon = horizon
         self.iterations = iterations
+        self.cam_k = cam_k
         self.ct = ct
         self.flow_utils = FlowNet2Utils()
         self.vs_lstm = Model().to(device="cuda:0")
@@ -70,25 +72,25 @@ class Rtvs:
         ct = self.ct
 
         photo_error_val = mse_(img_src, img_goal)
-        if photo_error_val < 6000 and photo_error_val > 3600:
-            self.horizon = 10 * (photo_error_val / 6000)
-        elif photo_error_val < 3000:
-            self.horizon = 6
+        # if photo_error_val < 6000 and photo_error_val > 3600:
+        #     self.horizon = 10 * (photo_error_val / 6000)
+        # elif photo_error_val < 3000:
+        #     self.horizon = 6
 
         self.cnt = 0 if not hasattr(self, "cnt") else self.cnt + 1
         f12 = flow_utils.flow_calculate(img_src, img_goal)[::ct, ::ct]
         Image.fromarray(flow2img(f12)).save(f"imgs/flow_{str(self.cnt).zfill(5)}.png")
-        flow_depth_proxy = (
-            flow_utils.flow_calculate(img_src, pre_img_src).astype("float64")
-            if depth is None
-            else np.asarray(depth, dtype=np.float64)[..., np.newaxis]
-        )
 
-        Cy, Cx = flow_depth_proxy.shape[1] / 2, flow_depth_proxy.shape[0] / 2
-        flow_depth = np.linalg.norm(flow_depth_proxy[::ct, ::ct], axis=2)
-        flow_depth = flow_depth.astype("float64")
-        vel, Lsx, Lsy = get_interaction_data(
-            0.6 * (1 / (1 + np.exp(-1 / flow_depth)) - 0.5), ct, Cy, Cx
+        if depth is None:
+            flow_depth_proxy = (
+                flow_utils.flow_calculate(img_src, pre_img_src).astype("float64")
+            )[::ct, ::ct]
+            flow_depth = np.linalg.norm(flow_depth_proxy, axis=2).astype("float64")
+            final_depth = (0.6 / (1 + np.exp(-1 / flow_depth)) - 0.5)
+        else:
+            final_depth = (depth[::ct, ::ct] + 1)/10
+
+        vel, Lsx, Lsy = get_interaction_data(final_depth, ct, self.cam_k
         )
 
         Lsx = torch.tensor(Lsx, dtype=torch.float32).to(device="cuda:0")
@@ -105,7 +107,7 @@ class Rtvs:
             f_hat = vs_lstm.forward(vel, Lsx, Lsy, self.horizon, f12)
             loss = loss_fn(f_hat, f12)
 
-            logger.debug(rtvs_mse=loss.item()**0.5, rtvs_itr=itr)
+            logger.debug(rtvs_mse=loss.item() ** 0.5, rtvs_itr=itr)
             loss.backward(retain_graph=True)
             optimiser.step()
 
@@ -121,14 +123,20 @@ class Rtvs:
 
         vel = vs_lstm.v_interm[0].detach().cpu().numpy()
         logger.info(RAW_RTVS_VELOCITY=vel)
-        vel = vel / np.linalg.norm(vel)
+        # vel = vel
+        # vel[:] = 0
+        # vel[2] = 1
+        # vel[1] *= -1
+        # vel[2] *= -1
 
         return vel, photo_error_val
 
 
-def get_interaction_data(d1, ct, Cy, Cx):
-    ky = Cy = float(Cy)
-    kx = Cx = float(Cx)
+def get_interaction_data(d1, ct, cam_k):
+    kx = cam_k[0, 0]
+    ky = cam_k[1, 1]
+    Cx = cam_k[0, 2]
+    Cy = cam_k[1, 2]
     xyz = np.zeros([d1.shape[0], d1.shape[1], 3])
     Lsx = np.zeros([d1.shape[0], d1.shape[1], 6])
     Lsy = np.zeros([d1.shape[0], d1.shape[1], 6])

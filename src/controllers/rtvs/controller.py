@@ -42,7 +42,12 @@ class RTVSController(Controller):
         if err < 0.05:
             self.ready_to_grasp = True
 
-        logger.debug(pred_vel=vel, pred_speed=np.linalg.norm(vel), err=err)
+        logger.debug(
+            "controller (gt frame):",
+            pred_vel=vel,
+            pred_speed=np.linalg.norm(vel),
+            photo_err=err,
+        )
         return vel
 
     def get_action(self, rgb_img, depth_img, cur_t, ee_pos):
@@ -52,7 +57,7 @@ class RTVSController(Controller):
             action[:3] = self._get_ee_val(rgb_img, depth_img)
             if cur_t <= 0.6 * self.grasp_time:
                 tpos = self._action_vel_to_target_pos(action[:3], ee_pos)
-                tpos[2] = max(tpos[2], self.conveyor_level + self.box_size[2] + 0.005)
+                # tpos[2] = max(tpos[2], self.conveyor_level + self.box_size[2] + 0.005)
                 action[2] = self._target_pos_to_action_vel(tpos, ee_pos)[2]
         else:
             action[4] = 1
