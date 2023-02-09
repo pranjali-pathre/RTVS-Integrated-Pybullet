@@ -34,10 +34,10 @@ class Model(nn.Module):
         self.block = nn.Sequential(
             nn.Linear(6, 512),
             nn.ReLU(),
-            nn.Dropout(0.6),
+            # nn.Dropout(0.6),
             nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Dropout(0.6),
+            # nn.Dropout(0.6),
         )
 
         # we add linear layer instead of unblocking layer

@@ -28,7 +28,7 @@ class Rtvs:
         img_goal: np.ndarray,
         cam_k: np.ndarray,
         ct=1,
-        horizon=1,
+        horizon=20,
         LR=0.005,
         iterations=10,
     ):

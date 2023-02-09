@@ -39,7 +39,8 @@ class URRobotGym:
         try:
             self.robot = Robot(
                 "ur5e_2f140",
-                pb_cfg={"gui": gui, "realtime": False, "opengl_render": True},
+                # Have to keep openGL render off for the texture to work
+                pb_cfg={"gui": gui, "realtime": False, "opengl_render": False},
             )
             assert p.isConnected(self.robot.pb_client.get_client_id())
         except:
@@ -61,6 +62,7 @@ class URRobotGym:
 
     def config_vals_set(self, belt_init_pose, belt_vel, grasp_time=4):
         self.step_dt = 0.01
+        self.ground_lvl = 0.851
         p.setTimeStep(self.step_dt)
         self._action_repeat = 4
         self._ee_pos_scale = self.step_dt * self._action_repeat
@@ -88,12 +90,19 @@ class URRobotGym:
         self.post_grasp_duration = 1
 
         self.belt = SimpleNamespace()
-        self.belt.size = np.array([60, 60, 0.001])
+        # self.belt.size = np.array([60, 60, 0.001])
         self.belt.vel = np.array(belt_vel)
         self.belt.vel[2] = 0
         self.belt.init_pos = np.array(belt_init_pose)
-        self.belt.init_pos[2] = 0.851
-        self.belt.color = [0, 1, 1, 1]
+        self.belt.init_pos[2] = self.ground_lvl
+        self.belt.texture_name = "../data/fluid.png"
+        self.belt.scale = 0.1
+
+        self.wall = SimpleNamespace()
+        self.wall.init_pos = self.belt.init_pos + [0, 1, 0]
+        self.wall.ori = np.deg2rad([90, 0, 0])
+        self.wall.texture_name = "../data/stones.png"
+        self.wall.scale = 1
 
         self.table = SimpleNamespace()
         self.table.pos = np.array([0.5, 0, -5.4])
@@ -163,21 +172,36 @@ class URRobotGym:
         change_friction = lambda id, lf=0, sf=0: p.changeDynamics(
             bodyUniqueId=id, linkIndex=-1, lateralFriction=lf, spinningFriction=sf
         )
+
+        self.textures = {}
+
+        def apply_texture(obj):
+            if obj.texture_name not in self.textures:
+                tex_id = p.loadTexture(obj.texture_name)
+                assert tex_id >= 0
+                self.textures[obj.texture_name] = tex_id
+            else:
+                tex_id = self.textures[obj.texture_name]
+            obj.texture_id = tex_id
+            p.changeVisualShape(obj.id, -1, textureUniqueId=tex_id)
+
         self.arm.go_home(ignore_physics=True)
         self.arm.eetool.open(ignore_physics=True)
-        # exit(0)
-        self.table.id: int = self.robot.pb_client.load_urdf(
-            "table/table.urdf", self.table.pos, euler2quat(self.table.ori), scaling=10
-        )
-        change_friction(self.table.id, 0, 0)
-        self.belt.id: int = self.pb_client.load_geom(
-            "box",
-            size=(self.belt.size / 2).tolist(),
-            mass=0,
-            base_pos=self.belt.init_pos,
-            rgba=self.belt.color,
+
+        self.belt.id: int = p.loadURDF(
+            "plane.urdf", self.belt.init_pos, globalScaling=self.belt.scale
         )
         change_friction(self.belt.id, 2, 2)
+        apply_texture(self.belt)
+
+        self.wall.id: int = p.loadURDF(
+            "plane.urdf",
+            self.wall.init_pos,
+            euler2quat(self.wall.ori),
+            globalScaling=self.wall.scale,
+        )
+        apply_texture(self.wall)
+
         self.box_id = self.robot.pb_client.load_geom(
             "box",
             size=(self.box.size / 2).tolist(),
@@ -201,8 +225,7 @@ class URRobotGym:
 
     @property
     def conveyor_level(self):
-        belt_pos = self.get_pos(self.belt)
-        return belt_pos[2] + self.belt.size[2] / 2
+        return self.ground_lvl
 
     @property
     def sim_time(self):
@@ -306,7 +329,7 @@ class URRobotGym:
         cam_dir = cam_eye + self.cam_to_gt_R.apply([0, 0, 0.1])
         p.addUserDebugLine(cam_dir, cam_eye, [0, 1, 0], 3, 0.5)
         rgb, depth, seg = self.cam.get_images(
-            get_rgb, get_depth, get_seg, shadow=0, lightDirection=[0, 0, 0]
+            get_rgb, get_depth, get_seg, shadow=0, lightDirection=[0, 0, 2]
         )
         if noise is not None:
             depth *= np.random.normal(loc=1, scale=noise, size=depth.shape)
@@ -360,7 +383,9 @@ class URRobotGym:
             rgb, depth, seg, cam_eye = self.render(
                 for_video=False, noise=self.depth_noise
             )
-            pcd_3d, pcd_rgb = self.cam.get_pcd(depth_min=-np.inf, depth_max=np.inf)
+            pcd_3d, pcd_rgb = self.cam.get_pcd(
+                depth_min=-np.inf, depth_max=np.inf, rgb_image=rgb, depth_image=depth
+            )
             multi_add_to_state(
                 (self.obj_pos, "obj_pos"),
                 (self.obj_pos_8, "obj_corners"),
@@ -391,7 +416,11 @@ class URRobotGym:
 
             add_to_state(action, "action")
             logger.info(time=self.sim_time, action=action)
-            logger.info(ee_pos=self.ee_pos, obj_pos=self.obj_pos)
+            logger.info(
+                ee_pos=self.ee_pos,
+                obj_pos=self.obj_pos,
+                dist=np.round(np.linalg.norm(self.ee_pos - self.obj_pos), 3),
+            )
             self.step(action)
             if self.sim_time == self.grasp_time:
                 logger.info(ee_pos=self.ee_pos)
@@ -401,12 +430,7 @@ class URRobotGym:
 
 
 def simulate(init_cfg, gui, controller, record):
-    env = URRobotGym(
-        *init_cfg,
-        gui=gui,
-        controller_type=controller,
-        record=record,
-    )
+    env = URRobotGym(*init_cfg, gui=gui, controller_type=controller, record=record)
     return env.run()
 
 
