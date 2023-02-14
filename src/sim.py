@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import numpy as np
 import pybullet as p
 from airobot import Robot
+from multiprocessing.pool import ThreadPool
 from airobot.arm.ur5e_pybullet import UR5ePybullet as UR5eArm
 from airobot.utils.common import clamp
 from airobot.utils.common import euler2quat, quat2euler, euler2rot
@@ -13,6 +14,7 @@ from utils.logger import logger
 from scipy.spatial.transform import Rotation as R
 from PIL import Image
 import argparse
+
 
 np.set_string_function(
     lambda x: repr(np.round(x, 4))
@@ -59,6 +61,7 @@ class URRobotGym:
         self.controller_type = controller_type
         self.vs_mode = bool(controller_type in ["rtvs", "ibvs"])
         self._set_controller()
+        self._img_save_pool = ThreadPool(3)
 
     def config_vals_set(self, belt_init_pose, belt_vel, grasp_time=4):
         self.step_dt = 0.01
@@ -89,19 +92,22 @@ class URRobotGym:
         self.grasp_time = grasp_time
         self.post_grasp_duration = 1
 
+        self.ground = SimpleNamespace()
+        self.ground.init_pos = [0, 0, self.ground_lvl - 0.005]
+        self.ground.scale = 0.1
+
         self.belt = SimpleNamespace()
-        # self.belt.size = np.array([60, 60, 0.001])
         self.belt.vel = np.array(belt_vel)
         self.belt.vel[2] = 0
         self.belt.init_pos = np.array(belt_init_pose)
         self.belt.init_pos[2] = self.ground_lvl
-        self.belt.texture_name = "../data/fluid.png"
+        self.belt.color = [0, 0, 0, 0]
         self.belt.scale = 0.1
 
         self.wall = SimpleNamespace()
         self.wall.init_pos = self.belt.init_pos + [0, 1, 0]
         self.wall.ori = np.deg2rad([90, 0, 0])
-        self.wall.texture_name = "../data/stones.png"
+        self.wall.texture_name = "../data/cream.png"
         self.wall.scale = 1
 
         self.table = SimpleNamespace()
@@ -113,7 +119,7 @@ class URRobotGym:
         self.box.init_pos = np.array([*self.belt.init_pos[:2], 0.9])
         self.box.init_ori = np.deg2rad([0, 0, 90])
         # self.box.init_ori = [0, 0, np.arctan2(self.belt.vel[1], self.belt.vel[0])]
-        self.box.color = [1, 0, 0, 1]
+        self.box.color = [0, 1, 0, 1]
 
     def _set_controller(self):
         logger.info(controller_type=self.controller_type)
@@ -128,6 +134,7 @@ class URRobotGym:
                 self._ee_pos_scale,
                 Rtvs("./dest.png", self.cam.get_cam_int()),
                 self.cam_to_gt_R,
+                max_speed=0.7,
             )
         elif self.controller_type == "ibvs":
             from controllers.ibvs import IBVSController, IBVSHelper
@@ -174,8 +181,10 @@ class URRobotGym:
         )
 
         self.textures = {}
-
-        def apply_texture(obj):
+        def apply_col_texture(obj):
+            assert (hasattr(obj, "color") ^ hasattr(obj, "texture_name"))
+            if hasattr(obj, "color"):
+                return p.changeVisualShape(obj.id, -1, rgbaColor=obj.color)
             if obj.texture_name not in self.textures:
                 tex_id = p.loadTexture(obj.texture_name)
                 assert tex_id >= 0
@@ -185,14 +194,19 @@ class URRobotGym:
             obj.texture_id = tex_id
             p.changeVisualShape(obj.id, -1, textureUniqueId=tex_id)
 
+
         self.arm.go_home(ignore_physics=True)
         self.arm.eetool.open(ignore_physics=True)
+
+        self.ground.id = p.loadURDF(
+            "plane.urdf", self.ground.init_pos, globalScaling=self.ground.scale
+        )
 
         self.belt.id: int = p.loadURDF(
             "plane.urdf", self.belt.init_pos, globalScaling=self.belt.scale
         )
         change_friction(self.belt.id, 2, 2)
-        apply_texture(self.belt)
+        apply_col_texture(self.belt)
 
         self.wall.id: int = p.loadURDF(
             "plane.urdf",
@@ -200,7 +214,7 @@ class URRobotGym:
             euler2quat(self.wall.ori),
             globalScaling=self.wall.scale,
         )
-        apply_texture(self.wall)
+        apply_col_texture(self.wall)
 
         self.box_id = self.robot.pb_client.load_geom(
             "box",
@@ -335,6 +349,20 @@ class URRobotGym:
             depth *= np.random.normal(loc=1, scale=noise, size=depth.shape)
         return rgb, depth, seg, cam_eye
 
+    @staticmethod
+    def _save_img(rgb, t):
+        name = f"{str(int(t)).zfill(5)}.png"
+        last_path = "imgs/_last.png"
+        Image.fromarray(rgb).save(f"imgs/{name}")
+        if os.path.exists(last_path):
+            os.remove(last_path)
+        os.symlink(name, last_path)
+
+    def save_img(self, rgb, t):
+        if not self.record_mode:
+            return
+        self._img_save_pool.apply_async(self._save_img, (rgb, t))
+
     def run(self):
         state = {
             "cam_int": [],
@@ -400,10 +428,9 @@ class URRobotGym:
                 (pcd_3d, "pcd_3d"),
                 (pcd_rgb, "pcd_rgb"),
                 (self.cam.get_cam_ext(), "cam_ext"),
-            )
-            if self.record_mode:
-                Image.fromarray(rgb).save("imgs/" + str(int(t)).zfill(5) + ".png")
                 (self.cam.get_cam_int(), "cam_int"),
+            )
+            self.save_img(rgb, t)
             if not self.vs_mode:
 
                 action = self.gt_controller.get_action(
@@ -456,8 +483,9 @@ def main():
         np.random.seed(args.seed)
 
     init_cfg = ([0.45, -0.05, 0.851], [0, 0, 0])
+    # init_cfg = ([0.45, -0.05, 0.851], [0.1, 0, 0])
     if args.random:
-        init_cfg = get_random_config()[:2]
+        init_cfg[1] = get_random_config()[1]
 
     return simulate(init_cfg, args.gui, args.controller, args.record)
 

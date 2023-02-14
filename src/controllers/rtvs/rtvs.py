@@ -1,3 +1,4 @@
+import cv2
 import warnings
 import numpy as np
 from .dcem_model import Model
@@ -53,6 +54,23 @@ class Rtvs:
         )
         self.loss_fn = torch.nn.MSELoss(size_average=False)
 
+    @staticmethod
+    def detect_mask(rgb_img, pixrange=((0, 100, 100), (10, 255, 255))):
+        hsv_image = cv2.cvtColor(rgb_img, cv2.COLOR_RGB2HSV)
+        # segment red colour from image
+        mask = cv2.inRange(hsv_image, *pixrange)
+        mask[mask != 0] = 1
+        return mask[:, :, None]
+
+    @staticmethod
+    def save_flow(flow, cnt):
+        name = f"flow_{str(cnt).zfill(5)}.png"
+        last_flow_path = "imgs/_flow_last.png"
+        Image.fromarray(flow2img(flow)).save(f"imgs/{name}")
+        if os.path.exists(last_flow_path):
+            os.remove(last_flow_path)
+        os.symlink(name, last_flow_path)
+
     def get_vel(self, img_src, pre_img_src=None, depth=None):
         """
         img_src = current RGB camera image
@@ -71,27 +89,31 @@ class Rtvs:
             pre_img_src = pre_img_src
         ct = self.ct
 
-        photo_error_val = mse_(img_src, img_goal)
         # if photo_error_val < 6000 and photo_error_val > 3600:
         #     self.horizon = 10 * (photo_error_val / 6000)
         # elif photo_error_val < 3000:
         #     self.horizon = 6
 
         self.cnt = 0 if not hasattr(self, "cnt") else self.cnt + 1
+        obj_mask = self.detect_mask(img_src, ((50, 100, 100), (70, 255, 255)))
+        photo_error_val = mse_(img_src, img_goal)
+        obj_mask = obj_mask[::ct, ::ct]
         f12 = flow_utils.flow_calculate(img_src, img_goal)[::ct, ::ct]
-        Image.fromarray(flow2img(f12)).save(f"imgs/flow_{str(self.cnt).zfill(5)}.png")
+        f12 = f12 * obj_mask
+        self.save_flow(f12, self.cnt)
 
         if depth is None:
             flow_depth_proxy = (
                 flow_utils.flow_calculate(img_src, pre_img_src).astype("float64")
             )[::ct, ::ct]
             flow_depth = np.linalg.norm(flow_depth_proxy, axis=2).astype("float64")
-            final_depth = (0.6 / (1 + np.exp(-1 / flow_depth)) - 0.5)
+            final_depth = 0.6 / (1 + np.exp(-1 / flow_depth)) - 0.5
         else:
-            final_depth = (depth[::ct, ::ct] + 1)/10
+            final_depth = (depth[::ct, ::ct] + 1) / 10
 
-        vel, Lsx, Lsy = get_interaction_data(final_depth, ct, self.cam_k
-        )
+        vel, Lsx, Lsy = get_interaction_data(final_depth, ct, self.cam_k)
+        Lsx = Lsx * obj_mask
+        Lsy = Lsy * obj_mask
 
         Lsx = torch.tensor(Lsx, dtype=torch.float32).to(device="cuda:0")
         Lsy = torch.tensor(Lsy, dtype=torch.float32).to(device="cuda:0")

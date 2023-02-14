@@ -64,6 +64,8 @@ class RTVSController(Controller):
             if self.real_grasp_time is None:
                 self.real_grasp_time = cur_t
             if cur_t <= self.real_grasp_time + 0.5:
+                action[:3] = self._get_ee_val(rgb_img, depth_img)
+            elif cur_t <= self.real_grasp_time + 1.0:
                 action[:3] = [0, 0, 0.5]
             else:
                 action[:3] = self.post_grasp_dest - ee_pos
