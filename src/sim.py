@@ -59,7 +59,6 @@ class URRobotGym:
         self.record_mode = record
         self.depth_noise = config.get("dnoise", 0)
         self.controller_type = controller_type
-        self.vs_mode = bool(controller_type in ["rtvs", "ibvs"])
         self._set_controller()
         self._img_save_pool = ThreadPool(3)
 
@@ -136,6 +135,21 @@ class URRobotGym:
                 self.cam_to_gt_R,
                 max_speed=0.7,
             )
+
+        elif self.controller_type == "ours":
+            from controllers.rtvs import OursController, Ours
+
+            self.our_controller = OursController(
+                self.grasp_time,
+                self.ee_home_pos,
+                self.box.size,
+                self.conveyor_level,
+                self._ee_pos_scale,
+                Ours("./dest.png", self.cam.get_cam_int()),
+                self.cam_to_gt_R,
+                max_speed=7,
+            )
+
         elif self.controller_type == "ibvs":
             from controllers.ibvs import IBVSController, IBVSHelper
 
@@ -150,6 +164,7 @@ class URRobotGym:
                 ),
                 self.cam_to_gt_R,
             )
+
         else:
             from controllers.gt import GTController
 
@@ -181,8 +196,9 @@ class URRobotGym:
         )
 
         self.textures = {}
+
         def apply_col_texture(obj):
-            assert (hasattr(obj, "color") ^ hasattr(obj, "texture_name"))
+            assert hasattr(obj, "color") ^ hasattr(obj, "texture_name")
             if hasattr(obj, "color"):
                 return p.changeVisualShape(obj.id, -1, rgbaColor=obj.color)
             if obj.texture_name not in self.textures:
@@ -193,7 +209,6 @@ class URRobotGym:
                 tex_id = self.textures[obj.texture_name]
             obj.texture_id = tex_id
             p.changeVisualShape(obj.id, -1, textureUniqueId=tex_id)
-
 
         self.arm.go_home(ignore_physics=True)
         self.arm.eetool.open(ignore_physics=True)
@@ -431,10 +446,13 @@ class URRobotGym:
                 (self.cam.get_cam_int(), "cam_int"),
             )
             self.save_img(rgb, t)
-            if not self.vs_mode:
-
+            if self.controller_type == "gt":
                 action = self.gt_controller.get_action(
                     self.ee_pos, self.obj_pos, self.belt.vel, self.sim_time
+                )
+            elif self.controller_type == "ours":
+                action = self.our_controller.get_action(
+                    rgb, depth, self.sim_time, self.ee_pos, self.belt.vel
                 )
             else:
                 action = self.vs_controller.get_action(
@@ -469,7 +487,7 @@ def main():
         type=str,
         default="gt",
         help="controller",
-        choices=["gt", "rtvs", "ibvs"],
+        choices=["gt", "rtvs", "ibvs", "ours"],
     )
     parser.add_argument("--random", action="store_true")
     parser.add_argument("--gui", action="store_true", help="show gui")
@@ -482,8 +500,8 @@ def main():
     if args.seed is not None:
         np.random.seed(args.seed)
 
-    init_cfg = ([0.45, -0.05, 0.851], [0, 0, 0])
-    # init_cfg = ([0.45, -0.05, 0.851], [0.1, 0, 0])
+    # init_cfg = ([0.45, -0.05, 0.851], [0, 0, 0])
+    init_cfg = ([0.45, -0.05, 0.851], [0.07, 0.07, 0])
     if args.random:
         init_cfg[1] = get_random_config()[1]
 
