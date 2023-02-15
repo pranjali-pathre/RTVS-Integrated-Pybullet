@@ -133,7 +133,7 @@ class Ours:
             f_hat = vs_lstm.forward(vel, Lsx, Lsy, Ox, Oy, self.horizon, f12)
             loss = loss_fn(f_hat, f12)
 
-            logger.debug(rtvs_mse=loss.item() ** 0.5, rtvs_itr=itr)
+            logger.debug(ours_mse=loss.item() ** 0.5, ours_itr=itr)
             loss.backward(retain_graph=True)
             optimiser.step()
 
@@ -162,11 +162,9 @@ def get_interaction_data(d1, ct, cam_k, obj_vel):
     Lsy = np.zeros([d1.shape[0], d1.shape[1], 6])
     p = obj_vel[0]
     q = obj_vel[1]
+    r = obj_vel[2]
 
     d1[d1 == 0] = np.median(d1)
-
-    Ox = (1 / d1[:, :, None]) * p
-    Oy = (1 / d1[:, :, None]) * q
 
     def xyz_func(i, j, k):
         i = i.astype(int)
@@ -204,5 +202,8 @@ def get_interaction_data(d1, ct, cam_k, obj_vel):
     xyz = np.fromfunction(xyz_func, (d1.shape[0], d1.shape[1], 3), dtype=float)
     Lsx = np.fromfunction(lsx_func, (d1.shape[0], d1.shape[1], 6), dtype=float)
     Lsy = np.fromfunction(lsy_func, (d1.shape[0], d1.shape[1], 6), dtype=float)
+
+    Ox = (1 / d1[:, :, None]) * (p - xyz[:, :, 0:1] * r)
+    Oy = (1 / d1[:, :, None]) * (q - xyz[:, :, 1:2] * r)
 
     return None, Lsx, Lsy, Ox, Oy
