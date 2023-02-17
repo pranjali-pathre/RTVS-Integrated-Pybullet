@@ -21,5 +21,5 @@ class Controller:
     def _target_pos_to_action_vel(self, tar_pos, ee_pos):
         return (tar_pos - ee_pos) / self.ee_pos_scale
 
-    def get_action(self):
+    def get_action(self, obsevations:dict):
         raise NotImplementedError

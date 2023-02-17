@@ -36,6 +36,7 @@ class URRobotGym:
         config: dict = {},
         controller_type="gt",
         record=True,
+        flowdepth=False,
     ):
         self.gui = gui
         try:
@@ -57,16 +58,17 @@ class URRobotGym:
         self.config_vals_set(belt_init_pose, belt_vel, grasp_time)
         self.reset()
         self.record_mode = record
+        self.flowdepth = flowdepth
         self.depth_noise = config.get("dnoise", 0)
         self.controller_type = controller_type
         self._set_controller()
         self._img_save_pool = ThreadPool(3)
 
     def config_vals_set(self, belt_init_pose, belt_vel, grasp_time=4):
-        self.step_dt = 0.01
+        self.step_dt = 1 / 250
         self.ground_lvl = 0.851
         p.setTimeStep(self.step_dt)
-        self._action_repeat = 4
+        self._action_repeat = 10
         self._ee_pos_scale = self.step_dt * self._action_repeat
 
         self.cam_link_anchor_id = 22  #  or ('ur5_ee_link-gripper_base') link 10
@@ -125,7 +127,7 @@ class URRobotGym:
         if self.controller_type == "rtvs":
             from controllers.rtvs import Rtvs, RTVSController
 
-            self.vs_controller = RTVSController(
+            self.controller = RTVSController(
                 self.grasp_time,
                 self.ee_home_pos,
                 self.box.size,
@@ -139,7 +141,7 @@ class URRobotGym:
         elif self.controller_type == "ours":
             from controllers.rtvs import OursController, Ours
 
-            self.our_controller = OursController(
+            self.controller = OursController(
                 self.grasp_time,
                 self.ee_home_pos,
                 self.box.size,
@@ -147,13 +149,13 @@ class URRobotGym:
                 self._ee_pos_scale,
                 Ours("./dest.png", self.cam.get_cam_int()),
                 self.cam_to_gt_R,
-                max_speed=7,
+                max_speed=.7,
             )
 
         elif self.controller_type == "ibvs":
             from controllers.ibvs import IBVSController, IBVSHelper
 
-            self.vs_controller = IBVSController(
+            self.controller = IBVSController(
                 self.grasp_time,
                 self.ee_home_pos,
                 self.box.size,
@@ -168,7 +170,7 @@ class URRobotGym:
         else:
             from controllers.gt import GTController
 
-            self.gt_controller = GTController(
+            self.controller = GTController(
                 self.grasp_time,
                 self.ee_home_pos,
                 self.box.size,
@@ -246,7 +248,7 @@ class URRobotGym:
         logger.info(home_ee_pos=ee_pos, home_ee_euler=ee_euler)
         logger.info(home_jpos=self.arm.get_jpos())
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1)
-        self.render(for_video=False)
+        self.prev_rgb = self.render(for_video=False)[0]
         self.gripper_ori = 0
         self.belt_poses = []
         self.step_cnt = 0
@@ -446,18 +448,31 @@ class URRobotGym:
                 (self.cam.get_cam_int(), "cam_int"),
             )
             self.save_img(rgb, t)
+            observations = {
+                "cur_t": self.sim_time,
+                "ee_pos": self.ee_pos,
+            }
             if self.controller_type == "gt":
-                action = self.gt_controller.get_action(
-                    self.ee_pos, self.obj_pos, self.belt.vel, self.sim_time
-                )
+                observations["obj_pos"] = self.obj_pos
+                observations["belt_vel"] = self.belt.vel
+                observations["obj_vel"] = self.belt.vel
+            elif self.controller_type == "ibvs":
+                observations["rgb_img"] = rgb
+                observations["depth_img"] = depth
+            elif self.controller_type == "rtvs":
+                observations["rgb_img"] = rgb
+                observations["depth_img"] = depth
+                observations["prev_rgb_img"] = self.prev_rgb
             elif self.controller_type == "ours":
-                action = self.our_controller.get_action(
-                    rgb, depth, self.sim_time, self.ee_pos, self.belt.vel
-                )
-            else:
-                action = self.vs_controller.get_action(
-                    rgb, depth, self.sim_time, self.ee_pos
-                )
+                observations["rgb_img"] = rgb
+                observations["depth_img"] = depth
+                observations["prev_rgb_img"] = self.prev_rgb
+                observations["obj_vel"] = self.belt.vel
+
+            if self.flowdepth:
+                observations.pop("depth_img")
+
+            action = self.controller.get_action(observations)
 
             add_to_state(action, "action")
             logger.info(time=self.sim_time, action=action)
@@ -467,6 +482,7 @@ class URRobotGym:
                 dist=np.round(np.linalg.norm(self.ee_pos - self.obj_pos), 3),
             )
             self.step(action)
+            self.prev_rgb = rgb
             if self.sim_time == self.grasp_time:
                 logger.info(ee_pos=self.ee_pos)
 
@@ -474,8 +490,8 @@ class URRobotGym:
         return state
 
 
-def simulate(init_cfg, gui, controller, record):
-    env = URRobotGym(*init_cfg, gui=gui, controller_type=controller, record=record)
+def simulate(init_cfg, gui, controller, **kwargs):
+    env = URRobotGym(*init_cfg, gui=gui, controller_type=controller, **kwargs)
     return env.run()
 
 
@@ -493,19 +509,20 @@ def main():
     parser.add_argument("--gui", action="store_true", help="show gui")
     parser.add_argument("--no-gui", dest="gui", action="store_false", help="no gui")
     parser.add_argument("--record", action="store_true", help="save imgs")
+    parser.add_argument("--flowdepth", action="store_true", help="use flow_depth")
     parser.add_argument("--no-record", dest="record", action="store_false")
-    parser.set_defaults(gui=True, record=True)
+    parser.set_defaults(gui=False, record=True)
     parser.add_argument("--seed", type=int, default=None, help="seed")
     args = parser.parse_args()
     if args.seed is not None:
         np.random.seed(args.seed)
 
     # init_cfg = ([0.45, -0.05, 0.851], [0, 0, 0])
-    init_cfg = ([0.45, -0.05, 0.851], [0.07, 0.07, 0])
+    init_cfg = ([0.45, -0.05, 0.851], [-0.01, 0.03, 0])
     if args.random:
         init_cfg[1] = get_random_config()[1]
 
-    return simulate(init_cfg, args.gui, args.controller, args.record)
+    return simulate(init_cfg, args.gui, args.controller, record=args.record, flowdepth=args.flowdepth)
 
 
 if __name__ == "__main__":

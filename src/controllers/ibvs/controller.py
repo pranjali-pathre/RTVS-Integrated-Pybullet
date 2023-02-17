@@ -44,8 +44,13 @@ class IBVSController(Controller):
         logger.debug(pred_vel=vel, pred_speed=np.linalg.norm(vel), err=err)
         return vel
 
-    def get_action(self, rgb_img, depth_img, cur_t, ee_pos):
+    def get_action(self, observations:dict):
+        rgb_img = observations["rgb_img"]
+        ee_pos = observations["ee_pos"]
+        cur_t = observations["cur_t"]
+        depth_img = observations["depth_img"]
         action = np.zeros(5)
+
         if cur_t <= self.grasp_time and not self.ready_to_grasp:
             action[4] = -1
             action[:3] = self._get_ee_val(rgb_img, depth_img)

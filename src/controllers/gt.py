@@ -42,7 +42,11 @@ class GTController(Controller):
         logger.debug(pred_vel=vel, pred_speed=round(np.linalg.norm(vel), 3))
         return vel
 
-    def get_action(self, ee_pos, obj_pos, obj_vel, cur_t):
+    def get_action(self, observations):
+        ee_pos = observations["ee_pos"]
+        obj_pos = observations["obj_pos"]
+        obj_vel = observations["obj_vel"]
+        cur_t = observations["cur_t"]
         action = np.zeros(5)
         if cur_t <= self.grasp_time:
             action[4] = -1

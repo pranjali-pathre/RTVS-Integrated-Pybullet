@@ -105,7 +105,7 @@ class Ours:
                 flow_utils.flow_calculate(img_src, pre_img_src).astype("float64")
             )[::ct, ::ct]
             flow_depth = np.linalg.norm(flow_depth_proxy, axis=2).astype("float64")
-            final_depth = 0.6 / (1 + np.exp(-1 / flow_depth)) - 0.5
+            final_depth = 0.1 / ((1 + np.exp(-1 / flow_depth)) - 0.5)
         else:
             final_depth = (depth[::ct, ::ct] + 1) / 10
 
