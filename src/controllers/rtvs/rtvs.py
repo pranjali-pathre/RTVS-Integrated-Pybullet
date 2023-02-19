@@ -1,5 +1,6 @@
 import cv2
 import warnings
+from utils.img_saver import ImageSaver
 import numpy as np
 from .dcem_model import Model
 from .calculate_flow import FlowNet2Utils
@@ -62,15 +63,6 @@ class Rtvs:
         mask[mask != 0] = 1
         return mask[:, :, None]
 
-    @staticmethod
-    def save_flow(flow, cnt):
-        name = f"flow_{str(cnt).zfill(5)}.png"
-        last_flow_path = "imgs/_flow_last.png"
-        Image.fromarray(flow2img(flow)).save(f"imgs/{name}")
-        if os.path.exists(last_flow_path):
-            os.remove(last_flow_path)
-        os.symlink(name, last_flow_path)
-
     def get_vel(self, img_src, pre_img_src=None, depth=None):
         """
         img_src = current RGB camera image
@@ -100,7 +92,7 @@ class Rtvs:
         obj_mask = obj_mask[::ct, ::ct]
         f12 = flow_utils.flow_calculate(img_src, img_goal)[::ct, ::ct]
         f12 = f12 * obj_mask
-        self.save_flow(f12, self.cnt)
+        ImageSaver.save_flow_img(flow2img(f12), self.cnt)
 
         if depth is None:
             flow_depth_proxy = (

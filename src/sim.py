@@ -4,15 +4,14 @@ from types import SimpleNamespace
 import numpy as np
 import pybullet as p
 from airobot import Robot
-from multiprocessing.pool import ThreadPool
 from airobot.arm.ur5e_pybullet import UR5ePybullet as UR5eArm
 from airobot.utils.common import clamp
 from airobot.utils.common import euler2quat, quat2euler, euler2rot
 from airobot.sensor.camera.rgbdcam_pybullet import RGBDCameraPybullet
 from utils.sim_utils import get_random_config
 from utils.logger import logger
+from utils.img_saver import ImageSaver
 from scipy.spatial.transform import Rotation as R
-from PIL import Image
 import argparse
 
 
@@ -62,7 +61,6 @@ class URRobotGym:
         self.depth_noise = config.get("dnoise", 0)
         self.controller_type = controller_type
         self._set_controller()
-        self._img_save_pool = ThreadPool(3)
 
     def config_vals_set(self, belt_init_pose, belt_vel, grasp_time=4):
         self.step_dt = 1 / 250
@@ -287,7 +285,7 @@ class URRobotGym:
         gripper_ang = self._scale_gripper_angle(action[4])
 
         for step in range(self._action_repeat):
-            self.robot.arm.set_jpos(jnt_pos, wait=False)
+            self.arm.set_jpos(jnt_pos, wait=False, ignore_physics=(self.sim_time < self.grasp_time))
             self.robot.arm.eetool.set_jpos(gripper_ang, wait=False)
             if use_belt:
                 p.resetBaseVelocity(self.belt.id, self.belt.vel)
@@ -366,19 +364,10 @@ class URRobotGym:
             depth *= np.random.normal(loc=1, scale=noise, size=depth.shape)
         return rgb, depth, seg, cam_eye
 
-    @staticmethod
-    def _save_img(rgb, t):
-        name = f"{str(int(t)).zfill(5)}.png"
-        last_path = "imgs/_last.png"
-        Image.fromarray(rgb).save(f"imgs/{name}")
-        if os.path.exists(last_path):
-            os.remove(last_path)
-        os.symlink(name, last_path)
-
     def save_img(self, rgb, t):
         if not self.record_mode:
             return
-        self._img_save_pool.apply_async(self._save_img, (rgb, t))
+        ImageSaver.save_rgb(rgb, t)
 
     def run(self):
         state = {
