@@ -13,11 +13,11 @@ class Args:
 
 
 class FlowNet2Utils:
+    net = FlowNet2(Args()).cuda()
+    net.load_state_dict(torch.load("../data/FlowNet2_checkpoint.pth.tar")["state_dict"])
+
     def __init__(self):
-        args = Args()
-        self.net = FlowNet2(args).cuda()
-        dict = torch.load("../data/FlowNet2_checkpoint.pth.tar")
-        self.net.load_state_dict(dict["state_dict"])
+        pass
 
     @staticmethod
     def resize_img(img, new_size):

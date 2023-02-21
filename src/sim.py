@@ -478,6 +478,9 @@ class URRobotGym:
         logger.info("Run end", obj_pose=self.obj_pos, ee_pos=self.ee_pos)
         return state
 
+    def __del__(self):
+        p.disconnect(self.pb_client.get_client_id())
+
 
 def simulate(init_cfg, gui, controller, **kwargs):
     env = URRobotGym(*init_cfg, gui=gui, controller_type=controller, **kwargs)
@@ -507,7 +510,7 @@ def main():
         np.random.seed(args.seed)
 
     # init_cfg = ([0.45, -0.05, 0.851], [0, 0, 0])
-    init_cfg = ([0.45, -0.05, 0.851], [-0.01, 0.03, 0])
+    init_cfg = [[0.45, -0.05, 0.851], [-0.01, 0.03, 0]]
     if args.random:
         init_cfg[1] = get_random_config()[1]
 
