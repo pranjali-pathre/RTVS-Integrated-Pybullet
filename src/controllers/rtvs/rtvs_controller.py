@@ -74,4 +74,4 @@ class RTVSController(Controller):
                 action[:3] = [0, 0, 0.5]
             else:
                 action[:3] = self.post_grasp_dest - ee_pos
-        return action
+        return action, self.rtvs.get_iou(rgb_img)

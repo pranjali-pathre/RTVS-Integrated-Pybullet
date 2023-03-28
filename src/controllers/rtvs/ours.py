@@ -1,26 +1,15 @@
-import cv2
-import warnings
 import numpy as np
-from utils.img_saver import ImageSaver
-from .our_dcem_model import Model
-from .calculate_flow import FlowNet2Utils
-import os
 import torch
-from .utils.photo_error import mse_
-from .utils.flow_utils import flow2img
+
+from utils.img_saver import ImageSaver
 from utils.logger import logger
-from PIL import Image
 
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
-# np.random.seed(0)
-# warnings.filterwarnings("ignore")
-# torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = True
-# torch.manual_seed(0)
-# torch.autograd.set_detect_anomaly(True)
+from .base_rtvs import BaseRtvs
+from .our_dcem_model import Model
+from .utils.flow_utils import flow2img
 
 
-class Ours:
+class Ours(BaseRtvs):
     def __init__(
         self,
         img_goal: np.ndarray,
@@ -30,34 +19,8 @@ class Ours:
         LR=0.005,
         iterations=10,
     ):
-        """
-        img_goal: RGB array for final pose
-        ct = image downsampling parameter (high ct => faster but less accurate)
-        LR = learning rate of NN
-        iterations = iterations to train NN (high value => slower but more accurate)
-        horizon = MPC horizon
-        """
-        if isinstance(img_goal, str):
-            img_goal = np.asarray(Image.open(img_goal))
-        self.img_goal = img_goal
-        self.horizon = horizon
-        self.iterations = iterations
-        self.cam_k = cam_k
-        self.ct = ct
-        self.flow_utils = FlowNet2Utils()
         self.vs_lstm = Model().to(device="cuda:0")
-        self.optimiser = torch.optim.Adam(
-            self.vs_lstm.parameters(), lr=LR, betas=(0.93, 0.999)
-        )
-        self.loss_fn = torch.nn.MSELoss(size_average=False)
-
-    @staticmethod
-    def detect_mask(rgb_img, pixrange=((0, 100, 100), (10, 255, 255))):
-        hsv_image = cv2.cvtColor(rgb_img, cv2.COLOR_RGB2HSV)
-        # segment red colour from image
-        mask = cv2.inRange(hsv_image, *pixrange)
-        mask[mask != 0] = 1
-        return mask
+        super().__init__(img_goal, cam_k, ct, horizon, LR, iterations)
 
     def get_vel(self, img_src, obj_vel, pre_img_src=None, depth=None):
         """
@@ -77,15 +40,16 @@ class Ours:
             pre_img_src = pre_img_src
         ct = self.ct
 
-        photo_error_val = mse_(img_src, img_goal)
+        # photo_error_val = mse_(img_src, img_goal)
         # if photo_error_val < 6000 and photo_error_val > 3600:
         #     self.horizon = 10 * (photo_error_val / 6000)
         # elif photo_error_val < 3000:
         #     self.horizon = 6
 
+        iou_score = self.get_iou(img_src)
         self.cnt = 0 if not hasattr(self, "cnt") else self.cnt + 1
         obj_mask = self.detect_mask(img_src, ((50, 100, 100), (70, 255, 255)))[
-            ::ct, ::ct, None
+            ::ct, ::ct
         ]
         f12 = flow_utils.flow_calculate(img_src, img_goal)[::ct, ::ct]
         f12 = f12 * obj_mask
@@ -141,7 +105,7 @@ class Ours:
 
         vel = vs_lstm.v_interm[0].detach().cpu().numpy()
         logger.info(RAW_OUR_VELOCITY=vel)
-        return vel, photo_error_val
+        return vel, iou_score
 
 
 def get_interaction_data(d1, ct, cam_k, obj_vel):

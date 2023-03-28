@@ -381,6 +381,7 @@ class URRobotGym:
             "joint_pos": [],
             "action": [],
             "t": [],
+            "err": [],
             "cam_eye": [],
             "joint_vel": [],
             "images": {
@@ -461,14 +462,14 @@ class URRobotGym:
             if self.flowdepth:
                 observations.pop("depth_img")
 
-            action = self.controller.get_action(observations)
+            action, err = self.controller.get_action(observations)
 
-            add_to_state(action, "action")
+            multi_add_to_state((action, "action"), (err, "err"))
             logger.info(time=self.sim_time, action=action)
+            logger.info(ee_pos=self.ee_pos, obj_pos=self.obj_pos)
             logger.info(
-                ee_pos=self.ee_pos,
-                obj_pos=self.obj_pos,
                 dist=np.round(np.linalg.norm(self.ee_pos - self.obj_pos), 3),
+                iou_err=err,
             )
             self.step(action)
             self.prev_rgb = rgb

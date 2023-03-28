@@ -38,6 +38,7 @@ class IBVSController(Controller):
         vel = ee_vel_gt * (
             speed / np.linalg.norm(ee_vel_gt) if not np.isclose(speed, 0) else 1
         )
+        self.err = err
         if err < 0.05:
             self.ready_to_grasp = True
 
@@ -50,7 +51,7 @@ class IBVSController(Controller):
         cur_t = observations["cur_t"]
         depth_img = observations["depth_img"]
         action = np.zeros(5)
-
+        self.err = 0
         if cur_t <= self.grasp_time and not self.ready_to_grasp:
             action[4] = -1
             action[:3] = self._get_ee_val(rgb_img, depth_img)
@@ -66,4 +67,4 @@ class IBVSController(Controller):
                 action[:3] = [0, 0, 0.5]
             else:
                 action[:3] = self.post_grasp_dest - ee_pos
-        return action
+        return action, self.err
