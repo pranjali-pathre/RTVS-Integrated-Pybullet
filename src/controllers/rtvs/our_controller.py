@@ -35,9 +35,10 @@ class OursController(Controller):
 
     def _get_ee_val(self, obj_vel, rgb_img, depth_img, prev_rgb_img):
         ee_vel_cam, err = self.ours.get_vel(
-            rgb_img, obj_vel, depth=depth_img, pre_img_src=prev_rgb_img
+            rgb_img, 0*obj_vel, depth=depth_img, pre_img_src=prev_rgb_img
         )
         ee_vel_cam = ee_vel_cam[:3]
+        ee_vel_cam += obj_vel
         ee_vel_gt = self.cam_to_gt_R.apply(ee_vel_cam)
         speed = min(self.max_speed, np.linalg.norm(ee_vel_gt))
         vel = ee_vel_gt * (
