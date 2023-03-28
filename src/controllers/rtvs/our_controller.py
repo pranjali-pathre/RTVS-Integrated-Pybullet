@@ -1,8 +1,10 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from .ours import Ours
+
 from utils.logger import logger
+
 from ..base_controller import Controller
+from .ours import Ours
 
 
 class OursController(Controller):
@@ -74,7 +76,9 @@ class OursController(Controller):
             if self.real_grasp_time is None:
                 self.real_grasp_time = cur_t
             if cur_t <= self.real_grasp_time + 0.5:
-                action[:3] = self._get_ee_val(obj_vel_cam, rgb_img, depth_img, prev_rgb_img)
+                action[:3] = self._get_ee_val(
+                    obj_vel_cam, rgb_img, depth_img, prev_rgb_img
+                )
             elif cur_t <= self.real_grasp_time + 1.0:
                 action[:3] = [0, 0, 0.5]
             else:

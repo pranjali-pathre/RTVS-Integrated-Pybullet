@@ -1,8 +1,10 @@
+import argparse
 import os
 import shutil
-from sim import simulate
-import argparse
+
 import numpy as np
+
+from sim import simulate
 from utils.sim_utils import get_random_config
 
 

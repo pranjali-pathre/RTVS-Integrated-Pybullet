@@ -1,19 +1,19 @@
+import argparse
 import os
 import shutil
 from types import SimpleNamespace
+
 import numpy as np
 import pybullet as p
 from airobot import Robot
 from airobot.arm.ur5e_pybullet import UR5ePybullet as UR5eArm
-from airobot.utils.common import clamp
-from airobot.utils.common import euler2quat, quat2euler, euler2rot
 from airobot.sensor.camera.rgbdcam_pybullet import RGBDCameraPybullet
-from utils.sim_utils import get_random_config
-from utils.logger import logger
-from utils.img_saver import ImageSaver
+from airobot.utils.common import clamp, euler2quat, euler2rot, quat2euler
 from scipy.spatial.transform import Rotation as R
-import argparse
 
+from utils.img_saver import ImageSaver
+from utils.logger import logger
+from utils.sim_utils import get_random_config
 
 np.set_string_function(
     lambda x: repr(np.round(x, 4))
@@ -137,7 +137,7 @@ class URRobotGym:
             )
 
         elif self.controller_type == "ours":
-            from controllers.rtvs import OursController, Ours
+            from controllers.rtvs import Ours, OursController
 
             self.controller = OursController(
                 self.grasp_time,
@@ -147,7 +147,7 @@ class URRobotGym:
                 self._ee_pos_scale,
                 Ours("./dest.png", self.cam.get_cam_int()),
                 self.cam_to_gt_R,
-                max_speed=.7,
+                max_speed=0.7,
             )
 
         elif self.controller_type == "ibvs":
@@ -285,7 +285,9 @@ class URRobotGym:
         gripper_ang = self._scale_gripper_angle(action[4])
 
         for step in range(self._action_repeat):
-            self.arm.set_jpos(jnt_pos, wait=False, ignore_physics=(self.sim_time < self.grasp_time))
+            self.arm.set_jpos(
+                jnt_pos, wait=False, ignore_physics=(self.sim_time < self.grasp_time)
+            )
             self.robot.arm.eetool.set_jpos(gripper_ang, wait=False)
             if use_belt:
                 p.resetBaseVelocity(self.belt.id, self.belt.vel)
@@ -515,7 +517,13 @@ def main():
     if args.random:
         init_cfg[1] = get_random_config()[1]
 
-    return simulate(init_cfg, args.gui, args.controller, record=args.record, flowdepth=args.flowdepth)
+    return simulate(
+        init_cfg,
+        args.gui,
+        args.controller,
+        record=args.record,
+        flowdepth=args.flowdepth,
+    )
 
 
 if __name__ == "__main__":

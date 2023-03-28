@@ -1,8 +1,10 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from .rtvs import Rtvs
+
 from utils.logger import logger
+
 from ..base_controller import Controller
+from .rtvs import Rtvs
 
 
 class RTVSController(Controller):
@@ -32,7 +34,9 @@ class RTVSController(Controller):
         self.real_grasp_time = None
 
     def _get_ee_val(self, rgb_img, depth_img, prev_rgb_img):
-        ee_vel_cam, err = self.rtvs.get_vel(rgb_img, depth=depth_img, pre_img_src=prev_rgb_img)
+        ee_vel_cam, err = self.rtvs.get_vel(
+            rgb_img, depth=depth_img, pre_img_src=prev_rgb_img
+        )
         ee_vel_cam = ee_vel_cam[:3]
         ee_vel_gt = self.cam_to_gt_R.apply(ee_vel_cam)
         speed = min(self.max_speed, np.linalg.norm(ee_vel_gt))
@@ -50,7 +54,7 @@ class RTVSController(Controller):
         )
         return vel
 
-    def get_action(self, observations:dict):
+    def get_action(self, observations: dict):
         rgb_img = observations["rgb_img"]
         ee_pos = observations["ee_pos"]
         cur_t = observations["cur_t"]

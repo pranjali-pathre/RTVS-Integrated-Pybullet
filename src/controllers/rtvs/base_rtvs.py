@@ -59,7 +59,5 @@ class BaseRtvs:
         mask_goal = self.detect_mask(self.img_goal, ((50, 100, 100), (70, 255, 255)))
         intersection = np.logical_and(mask_src, mask_goal)
         union = np.logical_or(mask_src, mask_goal)
-        # input()
-        iou_score = np.sum(intersection) / (np.sum(union)+0.001)
+        iou_score = np.sum(intersection) / (np.sum(union) + 0.001)
         return iou_score
-
