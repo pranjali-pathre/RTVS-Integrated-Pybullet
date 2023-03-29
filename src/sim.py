@@ -102,6 +102,15 @@ class URRobotGym:
         self.belt.init_pos[2] = self.ground_lvl
         self.belt.color = [0, 0, 0, 0]
         self.belt.scale = 0.1
+        self.belt.motion_type = "normal"
+
+        # # for circle
+        # self.belt.motion_type = "circle"
+        # self.belt.center = np.array([0.45, -0.05, 0.851])
+        # self.belt.radius = 0.03
+        # self.belt.w = 3
+        # self.belt.init_pos = self.belt.center + self.belt.radius * np.array([1, 0, 0])
+        # self._control_belt_motion(0)
 
         self.wall = SimpleNamespace()
         self.wall.init_pos = self.belt.init_pos + [0, 1, 0]
@@ -175,6 +184,18 @@ class URRobotGym:
                 self.conveyor_level,
                 self._ee_pos_scale,
             )
+
+    def _control_belt_motion(self, t=None, dt=None):
+        if t is None:
+            t = self.sim_time
+        if dt is None:
+            dt = self.step_dt * self._action_repeat
+
+        if self.belt.motion_type == "circle":
+            r = self.belt.radius
+            w = self.belt.w
+            self.belt.vel[0] = -w * r * np.sin(w * t)
+            self.belt.vel[1] = w * r * np.cos(w * t)
 
     def get_pos(self, obj):
         if isinstance(obj, int):
@@ -473,6 +494,7 @@ class URRobotGym:
                 dist=np.round(np.linalg.norm(self.ee_pos - self.obj_pos), 3),
                 iou_err=err,
             )
+            self._control_belt_motion()
             self.step(action)
             self.prev_rgb = rgb
             if self.sim_time == self.grasp_time:
