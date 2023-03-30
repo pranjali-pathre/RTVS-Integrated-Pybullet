@@ -11,7 +11,7 @@ from utils.sim_utils import get_random_config
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-c", "--controllers", nargs="+", type=str, default=["gt", "rtvs", "ours"]
+        "-c", "--controllers", nargs="+", type=str, default=["rtvs", "ours"]
     )
     parser.add_argument("-v", "--video", action="store_true")
     parser.add_argument("-r", "--random", action="store_true")

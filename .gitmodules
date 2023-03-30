@@ -1,3 +1,6 @@
 [submodule "src/rtvs/flownet2"]
 	path = src/controllers/rtvs/flownet2
 	url = https://github.com/VedanshM/flownet2-pytorch
+[submodule "data/ycb_objects"]
+	path = data/ycb_objects
+	url = https://github.com/eleramp/pybullet-object-models

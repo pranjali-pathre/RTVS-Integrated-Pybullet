@@ -41,7 +41,7 @@ class RTVSController(Controller):
         vel = ee_vel_gt * (
             speed / np.linalg.norm(ee_vel_gt) if not np.isclose(speed, 0) else 1
         )
-        if err < 0.05:
+        if err > 0.9:
             self.ready_to_grasp = True
 
         logger.debug(

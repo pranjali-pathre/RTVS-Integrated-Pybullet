@@ -306,9 +306,7 @@ class URRobotGym:
         gripper_ang = self._scale_gripper_angle(action[4])
 
         for step in range(self._action_repeat):
-            self.arm.set_jpos(
-                jnt_pos, wait=False, ignore_physics=(self.sim_time < self.grasp_time)
-            )
+            self.arm.set_jpos(jnt_pos, wait=False, ignore_physics=(action[4] != 1))
             self.robot.arm.eetool.set_jpos(gripper_ang, wait=False)
             if use_belt:
                 p.resetBaseVelocity(self.belt.id, self.belt.vel)
@@ -451,6 +449,7 @@ class URRobotGym:
 
         total_sim_time = self.grasp_time + self.post_grasp_duration
         grasping = False
+        grasping_success = False
         t = 0
         while t < int(np.ceil(time_steps * total_sim_time)):
             rgb, depth, seg, cam_eye = self.render(
@@ -502,9 +501,10 @@ class URRobotGym:
 
             action, err = self.controller.get_action(observations)
             if not grasping and self.controller.ready_to_grasp:
-                logger.info("Grasping start")
+                logger.debug("Grasping start")
                 grasping = True
                 total_sim_time = self.sim_time + self.post_grasp_duration
+                self.grasp_time = self.sim_time
                 state["grasp_time"] = self.sim_time
             multi_add_to_state((action, "action"), (err, "err"))
             logger.info(time=self.sim_time, action=action)
@@ -516,14 +516,17 @@ class URRobotGym:
             self._control_belt_motion()
             self.step(action)
             self.prev_rgb = rgb
-            if grasping and (
-                (self.obj_pos - self.belt.init_pos - self.box.size / 2)[2] > 0.02
+            if (
+                grasping
+                and not grasping_success
+                and ((self.obj_pos - self.belt.init_pos - self.box.size / 2)[2] > 0.02)
             ):
+                grasping_success = True
                 logger.info("Grasping success")
-                state["grasp_success"] = 1
             t += 1
+        state["grasp_success"] = grasping_success
 
-        logger.info("Run end", obj_pose=self.obj_pos, ee_pos=self.ee_pos)
+        logger.info("Run end", ee_pos=self.ee_pos, obj_pose=self.obj_pos)
         return state
 
     def __del__(self):
