@@ -53,6 +53,9 @@ class GTController(Controller):
             action[:3] = self._get_vel_pre_grasp(ee_pos, obj_pos, obj_vel, cur_t)
 
         else:
+            self.ready_to_grasp = True
+            if self.real_grasp_time is None:
+                self.real_grasp_time = cur_t
             action[4] = 1
             if cur_t <= self.grasp_time + 0.5:
                 action[:3] = [0, 0, 0.5]

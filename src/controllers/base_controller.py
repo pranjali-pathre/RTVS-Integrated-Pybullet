@@ -8,6 +8,9 @@ class Controller:
         ee_pos_scale,
         max_speed,
     ):
+        self.ready_to_grasp = False
+        self.real_grasp_time = None
+
         self.grasp_time = grasp_time
         self.post_grasp_dest = post_grasp_dest
         self.box_size = box_size

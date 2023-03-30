@@ -30,7 +30,6 @@ class OursController(Controller):
         self.ours = ours
         self.cam_to_gt_R = cam_to_gt_R
 
-        self.ready_to_grasp = False
         self.real_grasp_time = None
 
     def _get_ee_val(self, obj_vel, rgb_img, depth_img, prev_rgb_img):

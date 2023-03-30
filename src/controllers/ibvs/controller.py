@@ -28,8 +28,6 @@ class IBVSController(Controller):
         self.ibvs_helper = ibvs_helper
         self.cam_to_gt_R = cam_to_gt_R
 
-        self.ready_to_grasp = False
-        self.real_grasp_time = None
 
     def _get_ee_val(self, rgb_img, depth_img):
         ee_vel_cam, err = self.ibvs_helper.get_velocity(rgb_img, depth_img)

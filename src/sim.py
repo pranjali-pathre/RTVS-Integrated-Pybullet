@@ -394,6 +394,7 @@ class URRobotGym:
 
     def run(self):
         state = {
+            "obj_motion": {"motion_type": self.belt.motion_type},
             "cam_int": [],
             "cam_ext": [],
             "pcd_3d": [],
@@ -412,7 +413,19 @@ class URRobotGym:
                 "depth": [],
                 "seg": [],
             },
+            "grasp_time": self.grasp_time,
+            "grasp_success": 0,
         }
+        if self.belt.motion_type == "circle":
+            state["obj_motion"].update(
+                {
+                    "radius": self.belt.radius,
+                    "center": self.belt.center,
+                    "w": self.belt.w,
+                }
+            )
+        elif self.belt.motion_type == "normal":
+            state["obj_motion"].update({"vel": self.belt.vel})
 
         def add_to_state(val, *args):
             if isinstance(val, list) or (
@@ -437,7 +450,9 @@ class URRobotGym:
             os.makedirs("imgs", exist_ok=True)
 
         total_sim_time = self.grasp_time + self.post_grasp_duration
-        for t in range(int(np.ceil(time_steps * total_sim_time))):
+        grasping = False
+        t = 0
+        while t < int(np.ceil(time_steps * total_sim_time)):
             rgb, depth, seg, cam_eye = self.render(
                 for_video=False, noise=self.depth_noise
             )
@@ -486,7 +501,11 @@ class URRobotGym:
                 observations.pop("depth_img")
 
             action, err = self.controller.get_action(observations)
-
+            if not grasping and self.controller.ready_to_grasp:
+                logger.info("Grasping start")
+                grasping = True
+                total_sim_time = self.sim_time + self.post_grasp_duration
+                state["grasp_time"] = self.sim_time
             multi_add_to_state((action, "action"), (err, "err"))
             logger.info(time=self.sim_time, action=action)
             logger.info(ee_pos=self.ee_pos, obj_pos=self.obj_pos)
@@ -497,8 +516,12 @@ class URRobotGym:
             self._control_belt_motion()
             self.step(action)
             self.prev_rgb = rgb
-            if self.sim_time == self.grasp_time:
-                logger.info(ee_pos=self.ee_pos)
+            if grasping and (
+                (self.obj_pos - self.belt.init_pos - self.box.size / 2)[2] > 0.02
+            ):
+                logger.info("Grasping success")
+                state["grasp_success"] = 1
+            t += 1
 
         logger.info("Run end", obj_pose=self.obj_pos, ee_pos=self.ee_pos)
         return state

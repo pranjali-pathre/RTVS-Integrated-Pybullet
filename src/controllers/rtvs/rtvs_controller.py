@@ -30,8 +30,6 @@ class RTVSController(Controller):
         self.rtvs = rtvs
         self.cam_to_gt_R = cam_to_gt_R
 
-        self.ready_to_grasp = False
-        self.real_grasp_time = None
 
     def _get_ee_val(self, rgb_img, depth_img, prev_rgb_img):
         ee_vel_cam, err = self.rtvs.get_vel(
