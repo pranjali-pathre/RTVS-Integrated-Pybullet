@@ -395,8 +395,8 @@ class URRobotGym:
             "obj_motion": {"motion_type": self.belt.motion_type},
             "cam_int": [],
             "cam_ext": [],
-            "pcd_3d": [],
-            "pcd_rgb": [],
+            # "pcd_3d": [],
+            # "pcd_rgb": [],
             "obj_pos": [],
             "obj_corners": [],
             "ee_pos": [],
@@ -455,9 +455,9 @@ class URRobotGym:
             rgb, depth, seg, cam_eye = self.render(
                 for_video=False, noise=self.depth_noise
             )
-            pcd_3d, pcd_rgb = self.cam.get_pcd(
-                depth_min=-np.inf, depth_max=np.inf, rgb_image=rgb, depth_image=depth
-            )
+            # pcd_3d, pcd_rgb = self.cam.get_pcd(
+            #     depth_min=-np.inf, depth_max=np.inf, rgb_image=rgb, depth_image=depth
+            # )
             multi_add_to_state(
                 (self.obj_pos, "obj_pos"),
                 (self.obj_pos_8, "obj_corners"),
@@ -469,8 +469,8 @@ class URRobotGym:
                 (rgb, "images", "rgb"),
                 (depth, "images", "depth"),
                 (seg, "images", "seg"),
-                (pcd_3d, "pcd_3d"),
-                (pcd_rgb, "pcd_rgb"),
+                # (pcd_3d, "pcd_3d"),
+                # (pcd_rgb, "pcd_rgb"),
                 (self.cam.get_cam_ext(), "cam_ext"),
                 (self.cam.get_cam_int(), "cam_int"),
             )
