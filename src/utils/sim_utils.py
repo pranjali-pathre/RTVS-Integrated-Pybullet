@@ -10,10 +10,11 @@ def get_random_config(rng=None):
     grasp_time = 4
     vel = f(loc=[0, 0, 0], scale=[0.08, 0.1, 0], size=3)
     vel[1] = abs(vel[1])
-    grasp_pos = f(loc=[0.6, 0.0, 0.875], scale=[0.15, 0.1, 0], size=3)
-    grasp_pos[2] = -abs(grasp_pos[2])
-    obj_init_pos = grasp_pos - vel * grasp_time
-    obj_init_pos[:2] = np.clip(obj_init_pos[:2], [0.35, -0.07], [0.65, 0.07])
+    # grasp_pos = f(loc=[0.6, 0.0, 0.875], scale=[0.15, 0.1, 0], size=3)
+    # grasp_pos[2] = -abs(grasp_pos[2])
+    # obj_init_pos = grasp_pos - vel * grasp_time
+    # obj_init_pos[:2] = np.clip(obj_init_pos[:2], [0.35, -0.07], [0.65, 0.07])
+    obj_init_pos = f(loc=[0.45, -0.05, 0.851], scale=[0.15, 0.1, 0], size=3)
     vel[1] = abs(vel[1])
     vel[0] = np.clip(vel[0], -0.05, 0.05)
 

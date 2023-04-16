@@ -28,8 +28,7 @@ np.set_string_function(
 class URRobotGym:
     def __init__(
         self,
-        belt_init_pose,
-        belt_vel,
+        init_cfg: dict,
         grasp_time=4,
         gui=False,
         config: dict = {},
@@ -54,7 +53,7 @@ class URRobotGym:
         self.cam: RGBDCameraPybullet = self.robot.cam
         self.arm: UR5eArm = self.robot.arm
         self.pb_client = self.robot.pb_client
-        self.config_vals_set(belt_init_pose, belt_vel, grasp_time)
+        self.config_vals_set(init_cfg, grasp_time)
         self.reset()
         self.record_mode = record
         self.flowdepth = flowdepth
@@ -62,7 +61,7 @@ class URRobotGym:
         self.controller_type = controller_type
         self._set_controller()
 
-    def config_vals_set(self, belt_init_pose, belt_vel, grasp_time=4):
+    def config_vals_set(self, init_cfg: dict, grasp_time=4):
         self.step_dt = 1 / 250
         self.ground_lvl = 0.851
         p.setTimeStep(self.step_dt)
@@ -96,21 +95,22 @@ class URRobotGym:
         self.ground.scale = 0.1
 
         self.belt = SimpleNamespace()
-        self.belt.vel = np.array(belt_vel)
-        self.belt.vel[2] = 0
-        self.belt.init_pos = np.array(belt_init_pose)
-        self.belt.init_pos[2] = self.ground_lvl
         self.belt.color = [0, 0, 0, 0]
         self.belt.scale = 0.1
-        self.belt.motion_type = "normal"
-
-        # # for circle
-        # self.belt.motion_type = "circle"
-        # self.belt.center = np.array([0.45, -0.05, 0.851])
-        # self.belt.radius = 0.03
-        # self.belt.w = 3
-        # self.belt.init_pos = self.belt.center + self.belt.radius * np.array([1, 0, 0])
-        # self._control_belt_motion(0)
+        self.belt.motion_type = init_cfg["motion_type"]
+        if self.belt.motion_type == "linear":
+            self.belt.vel = np.array(init_cfg["obj_vel"])
+            self.belt.vel[2] = 0
+            self.belt.init_pos = np.array(init_cfg["obj_pos"])
+        elif self.belt.motion_type == "circle":
+            self.belt.center = np.array(init_cfg["obj_center"])
+            self.belt.radius = init_cfg["obj_radius"]
+            self.belt.w = init_cfg["obj_w"]
+            self.belt.init_pos = self.belt.center + self.belt.radius * np.array(
+                [1, 0, 0]
+            )
+        self.belt.init_pos[2] = self.ground_lvl
+        self._control_belt_motion(0)
 
         self.wall = SimpleNamespace()
         self.wall.init_pos = self.belt.init_pos + [0, 1, 0]
@@ -422,7 +422,7 @@ class URRobotGym:
                     "w": self.belt.w,
                 }
             )
-        elif self.belt.motion_type == "normal":
+        elif self.belt.motion_type == "linear":
             state["obj_motion"].update({"vel": self.belt.vel})
 
         def add_to_state(val, *args):
@@ -533,8 +533,8 @@ class URRobotGym:
         p.disconnect(self.pb_client.get_client_id())
 
 
-def simulate(init_cfg, gui, controller, **kwargs):
-    env = URRobotGym(*init_cfg, gui=gui, controller_type=controller, **kwargs)
+def simulate(init_cfg: dict, gui, controller, **kwargs):
+    env = URRobotGym(init_cfg, gui=gui, controller_type=controller, **kwargs)
     return env.run()
 
 
@@ -550,6 +550,7 @@ def main():
     )
     parser.add_argument("--random", action="store_true")
     parser.add_argument("--gui", action="store_true", help="show gui")
+    parser.add_argument("--circle", action="store_true", help="move in circle")
     parser.add_argument("--no-gui", dest="gui", action="store_false", help="no gui")
     parser.add_argument("--record", action="store_true", help="save imgs")
     parser.add_argument("--flowdepth", action="store_true", help="use flow_depth")
@@ -560,10 +561,36 @@ def main():
     if args.seed is not None:
         np.random.seed(args.seed)
 
-    # init_cfg = ([0.45, -0.05, 0.851], [0, 0, 0])
-    init_cfg = [[0.45, -0.05, 0.851], [-0.01, 0.03, 0]]
+    init_cfg = {
+        "motion_type": "linear",
+        "obj_pos": [0.45, -0.05, 0.851],
+        "obj_vel": [-0.01, 0.03, 0],
+        # "obj_vel": [0., 0., 0.],
+    }
+    if args.circle:
+        init_cfg = {
+            "motion_type": "circle",
+            "obj_center": [0.45, -0.05, 0.851],
+            "obj_w": 3,
+            "obj_radius": 0.03,
+        }
+
     if args.random:
-        init_cfg[1] = get_random_config()[1]
+        if args.circle:
+            init_cfg.update(
+                {
+                    "obj_w": np.random.uniform(1, 5),
+                    "obj_radius": np.random.uniform(0.01, 0.05),
+                }
+            )
+        else:
+            init_cfg.update(
+                {
+                    "obj_vel": np.random.uniform(
+                        [-0.05, -0.05, -0.05], [0.05, 0.05, 0.05]
+                    ),
+                }
+            )
 
     return simulate(
         init_cfg,
