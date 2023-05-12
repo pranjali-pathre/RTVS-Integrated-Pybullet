@@ -14,7 +14,7 @@ def run_trial(obj_pos, obj_vel, _):
         "motion_type": "linear",
     }
     from sim import simulate
-    ret = simulate(init_cfg, False, "rtvs", record=True)
+    ret = simulate(init_cfg, False, "rtvs", record=False)
     return ret
 
 
