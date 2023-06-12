@@ -1,3 +1,0 @@
-- conda create env from .yml file
-- install airobot using: `pip install git+https://github.com/Improbable-AI/airobot@4c0fe31`
-- install flownet2 submodule
