@@ -14,6 +14,7 @@ from scipy.spatial.transform import Rotation as R
 from utils.img_saver import ImageSaver
 from utils.logger import logger
 from utils.sim_utils import get_random_config
+from ycb_objects.pybullet_object_models import ycb_objects
 
 np.set_string_function(
     lambda x: repr(np.round(x, 4))
@@ -51,6 +52,7 @@ class URRobotGym:
             )
 
         self.cam: RGBDCameraPybullet = self.robot.cam
+        self.cam.setup_camera(height=256 , width=256)
         self.arm: UR5eArm = self.robot.arm
         self.pb_client = self.robot.pb_client
         self.config_vals_set(init_cfg, grasp_time)
@@ -112,11 +114,11 @@ class URRobotGym:
         self.belt.init_pos[2] = self.ground_lvl
         self._control_belt_motion(0)
 
-        self.wall = SimpleNamespace()
-        self.wall.init_pos = self.belt.init_pos + [0, 1, 0]
-        self.wall.ori = np.deg2rad([90, 0, 0])
-        self.wall.texture_name = "../data/cream.png"
-        self.wall.scale = 1
+        # self.wall = SimpleNamespace()
+        # self.wall.init_pos = self.belt.init_pos + [0, 1, 0]
+        # self.wall.ori = np.deg2rad([90, 0, 0])
+        # self.wall.texture_name = "../data/cream.png"
+        # self.wall.scale = 1
 
         self.table = SimpleNamespace()
         self.table.pos = np.array([0.5, 0, -5.4])
@@ -235,31 +237,43 @@ class URRobotGym:
         self.arm.eetool.open(ignore_physics=True)
 
         self.ground.id = p.loadURDF(
-            "plane.urdf", self.ground.init_pos, globalScaling=self.ground.scale
+            "simple_plane.urdf", self.ground.init_pos, globalScaling=self.ground.scale
         )
 
         self.belt.id: int = p.loadURDF(
-            "plane.urdf", self.belt.init_pos, globalScaling=self.belt.scale
+            "simple_plane.urdf", self.belt.init_pos, globalScaling=self.belt.scale
         )
         change_friction(self.belt.id, 2, 2)
         apply_col_texture(self.belt)
 
-        self.wall.id: int = p.loadURDF(
-            "plane.urdf",
-            self.wall.init_pos,
-            euler2quat(self.wall.ori),
-            globalScaling=self.wall.scale,
-        )
-        apply_col_texture(self.wall)
+        # self.wall.id: int = p.loadURDF(
+        #     "simple_plane.urdf",
+        #     self.wall.init_pos,
+        #     euler2quat(self.wall.ori),
+        #     globalScaling=self.wall.scale,
+        # )
+        # apply_col_texture(self.wall)
 
-        self.box_id = self.robot.pb_client.load_geom(
-            "box",
-            size=(self.box.size / 2).tolist(),
-            mass=1,
-            base_pos=self.box.init_pos,
-            rgba=self.box.color,
-            base_ori=euler2quat(self.box.init_ori),
+        # self.box_id = self.robot.pb_client.load_geom(
+        #     "box",
+        #     size=(self.box.size / 2).tolist(),
+        #     mass=1,
+        #     base_pos=self.box.init_pos,
+        #     rgba=self.box.color,
+        #     base_ori=euler2quat(self.box.init_ori),
+        # )
+        self.box_id = p.loadURDF(
+            os.path.join(ycb_objects.getDataPath(), "YcbChipsCan", "model.urdf"),
+            basePosition=self.box.init_pos,
+            baseOrientation=euler2quat(self.box.init_ori),
+            globalScaling=0.5,
         )
+        self.box.id = self.box_id
+
+        # apply_col_texture(self.box)
+        # self.box.color = [0, 1, 0, 1]
+        # apply_col_texture(self.box)
+
         ee_pos, _, _, ee_euler = self.arm.get_ee_pose()
         logger.info(init_belt_pose=self.get_pos(self.belt), belt_vel=self.belt.vel)
         # to make arm transparent (not works on TINY_RENDERER when getting img)
@@ -370,7 +384,7 @@ class URRobotGym:
     ):
         if for_video:
             self.robot.cam.setup_camera(
-                focus_pt=[0, 0, 0.7], dist=1.5, yaw=90, pitch=-40, roll=0
+                focus_pt=[0, 0, 0.7], dist=1.5, yaw=90, pitch=-40, roll=0, height=256 , width=256
             )
         else:
             self.cam.set_cam_ext(pos=self.cam_pos, ori=self.cam_ori)
@@ -378,6 +392,7 @@ class URRobotGym:
         cam_eye = self.cam_pos
         cam_dir = cam_eye + self.cam_to_gt_R.apply([0, 0, 0.1])
         p.addUserDebugLine(cam_dir, cam_eye, [0, 1, 0], 3, 0.5)
+        
         rgb, depth, seg = self.cam.get_images(
             get_rgb, get_depth, get_seg, shadow=0, lightDirection=[0, 0, 2]
         )
@@ -564,8 +579,8 @@ def main():
     init_cfg = {
         "motion_type": "linear",
         "obj_pos": [0.45, -0.05, 0.851],
-        "obj_vel": [-0.01, 0.03, 0],
-        # "obj_vel": [0., 0., 0.],
+        # "obj_vel": [-0.01, 0.03, 0],
+        "obj_vel": [0., 0., 0.],
     }
     if args.circle:
         init_cfg = {
@@ -591,7 +606,7 @@ def main():
                     ),
                 }
             )
-
+    print(init_cfg)
     return simulate(
         init_cfg,
         args.gui,

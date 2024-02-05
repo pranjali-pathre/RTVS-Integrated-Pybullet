@@ -3,7 +3,6 @@ from PIL import Image
 import sys
 import os
 
-
 def mse_(image_1, image_2, mask=None):
     imageA = np.asarray(image_1)
     imageB = np.asarray(image_2)

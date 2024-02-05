@@ -2,6 +2,8 @@ import numpy as np
 import torch
 
 from utils.img_saver import ImageSaver
+from .utils.photo_error import mse_
+
 from utils.logger import logger
 
 from .base_rtvs import BaseRtvs
@@ -15,7 +17,7 @@ class Ours(BaseRtvs):
         img_goal: np.ndarray,
         cam_k: np.ndarray,
         ct=1,
-        horizon=20,
+        horizon=2,
         LR=0.005,
         iterations=10,
     ):
@@ -40,7 +42,7 @@ class Ours(BaseRtvs):
             pre_img_src = pre_img_src
         ct = self.ct
 
-        # photo_error_val = mse_(img_src, img_goal)
+        photo_error_val = mse_(img_src, img_goal)
         # if photo_error_val < 6000 and photo_error_val > 3600:
         #     self.horizon = 10 * (photo_error_val / 6000)
         # elif photo_error_val < 3000:
@@ -48,11 +50,11 @@ class Ours(BaseRtvs):
 
         iou_score = self.get_iou(img_src)
         self.cnt = 0 if not hasattr(self, "cnt") else self.cnt + 1
-        obj_mask = self.detect_mask(img_src, ((50, 100, 100), (70, 255, 255)))[
-            ::ct, ::ct
-        ]
+        # obj_mask = self.detect_mask(img_src, ((50, 100, 100), (70, 255, 255)))[
+        #     ::ct, ::ct
+        # ]
         f12 = flow_utils.flow_calculate(img_src, img_goal)[::ct, ::ct]
-        f12 = f12 * obj_mask
+        # f12 = f12 * obj_mask
         # f12[:] = 0
         ImageSaver.save_flow_img(flow2img(f12), self.cnt)
 
@@ -68,10 +70,10 @@ class Ours(BaseRtvs):
         vel, Lsx, Lsy, Ox, Oy = get_interaction_data(
             final_depth, ct, self.cam_k, obj_vel
         )
-        Lsx = Lsx * obj_mask
-        Lsy = Lsy * obj_mask
-        Ox = Ox * obj_mask
-        Oy = Oy * obj_mask
+        # Lsx = Lsx * obj_mask
+        # Lsy = Lsy * obj_mask
+        # Ox = Ox * obj_mask
+        # Oy = Oy * obj_mask
 
         Lsx = torch.tensor(Lsx, dtype=torch.float32).to(device="cuda:0")
         Lsy = torch.tensor(Lsy, dtype=torch.float32).to(device="cuda:0")
@@ -105,7 +107,7 @@ class Ours(BaseRtvs):
 
         vel = vs_lstm.v_interm[0].detach().cpu().numpy()
         logger.info(RAW_OUR_VELOCITY=vel)
-        return vel, iou_score
+        return vel, iou_score, photo_error_val
 
 
 def get_interaction_data(d1, ct, cam_k, obj_vel):
@@ -113,6 +115,8 @@ def get_interaction_data(d1, ct, cam_k, obj_vel):
     ky = cam_k[1, 1]
     Cx = cam_k[0, 2]
     Cy = cam_k[1, 2]
+    print(kx, ky, Cx, Cy)
+
     xyz = np.zeros([d1.shape[0], d1.shape[1], 3])
     Lsx = np.zeros([d1.shape[0], d1.shape[1], 6])
     Lsy = np.zeros([d1.shape[0], d1.shape[1], 6])

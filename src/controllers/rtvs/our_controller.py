@@ -33,7 +33,7 @@ class OursController(Controller):
         self.real_grasp_time = None
 
     def _get_ee_val(self, obj_vel, rgb_img, depth_img, prev_rgb_img):
-        ee_vel_cam, err = self.ours.get_vel(
+        ee_vel_cam, err, photo_err = self.ours.get_vel(
             rgb_img, 0*obj_vel, depth=depth_img, pre_img_src=prev_rgb_img
         )
         ee_vel_cam = ee_vel_cam[:3]
@@ -50,7 +50,7 @@ class OursController(Controller):
             "controller (gt frame):",
             pred_vel=vel,
             pred_speed=np.linalg.norm(vel),
-            photo_err=err,
+            photo_err=photo_err,
         )
         return vel
 

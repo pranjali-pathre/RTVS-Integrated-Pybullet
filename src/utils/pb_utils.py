@@ -1399,8 +1399,10 @@ class Camera:
     def __init__(
         self,
         name,
-        width=512,
-        height=684,
+        # width=512,
+        # height=684,
+        width=256,
+        height=256,
         nearVal=0.01,
         farVal=3.0,
         camera_focus_distance=0.1,
